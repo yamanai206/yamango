@@ -52,6 +52,7 @@ import { CalendarScheduler } from './CalendarScheduler';
 import { CommissionControlPanel } from './CommissionControlPanel';
 import { AgentManager } from './AgentManager';
 import { AdminSecuritySettings } from './AdminSecuritySettings';
+import { AdminInspectionRequestsTable } from './AdminInspectionRequestsTable'; // 🔥 استيراد جدول طلبات الفحص
 import { processOfflineNotificationQueue, getStoredWhatsAppConfig } from '../services/whatsapp';
 
 interface AdminDashboardViewProps {
@@ -273,10 +274,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs hover:shadow-md transition-all cursor-pointer group relative overflow-hidden text-right"
           title="انقر للانتقال إلى جدول مواعيد وإشغال الكراجات المعتمدة"
         >
-          <div className="absolute top-0 right-0 w-1.5 h-full bg-amber-500 rounded-r-2xl" />
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-orange-500 rounded-r-2xl" />
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-600">الكراجات الفنية المعتمدة</span>
-            <span className="p-2 bg-amber-50 text-amber-600 rounded-xl group-hover:scale-105 transition-transform">
+            <span className="p-2 bg-orange-50 text-orange-600 rounded-xl group-hover:scale-105 transition-transform">
               <Wrench className="w-4 h-4" />
             </span>
           </div>
@@ -288,7 +289,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </div>
           <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
             <span className="text-slate-500">التغطية الميدانية:</span>
-            <span className="font-bold text-amber-700">
+            <span className="font-bold text-orange-700">
               الكفر، السويداء، وصلخد ({garages.length} إجمالي الورش)
             </span>
           </div>
@@ -306,7 +307,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+          <TrendingUp className="w-3.5 h-3.5 text-orange-400" />
           <span>نظرة عامة وكفاءة المنصة</span>
         </button>
 
@@ -315,7 +316,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           onClick={() => setActiveSubTab('commissions')}
           className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
             activeSubTab === 'commissions'
-              ? 'bg-amber-600 text-white shadow-xs'
+              ? 'bg-orange-600 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
@@ -371,7 +372,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Coins className="w-3.5 h-3.5 text-amber-400" />
+          <Coins className="w-3.5 h-3.5 text-orange-400" />
           <span>أسعار الصرف والعملات (USD / SYP)</span>
         </button>
 
@@ -423,9 +424,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
               <div className="flex items-center justify-between text-slate-400 mb-2">
                 <span className="font-semibold">إجمالي عمولات المنصة</span>
-                <Receipt className="w-4 h-4 text-amber-600" />
+                <Receipt className="w-4 h-4 text-orange-600" />
               </div>
-              <div className="text-xl font-black text-amber-700 tabular-nums">
+              <div className="text-xl font-black text-orange-700 tabular-nums">
                 ${totalCommissionUSD.toLocaleString()}
               </div>
               <span className="text-[10px] text-slate-500 font-medium mt-1 block">
@@ -449,7 +450,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
               <div className="flex items-center justify-between text-slate-400 mb-2">
                 <span className="font-semibold">الإعلانات المروجة النشطة</span>
-                <Sparkles className="w-4 h-4 text-amber-500" />
+                <Sparkles className="w-4 h-4 text-orange-500" />
               </div>
               <div className="text-xl font-black text-slate-900 tabular-nums">
                 {promotedListingsCount} إعلانات
@@ -477,13 +478,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                  <Percent className="w-4 h-4 text-amber-600" />
+                  <Percent className="w-4 h-4 text-orange-600" />
                   <span>نسب عمولة المنصة وحساب الأرباح</span>
                 </h3>
                 <button
                   type="button"
                   onClick={() => setActiveSubTab('commissions')}
-                  className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-[10px] font-black transition-colors flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1 bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200 rounded-lg text-[10px] font-black transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   <span>لوحة التحكم الكاملة</span>
                   <TrendingUp className="w-3 h-3" />
@@ -631,6 +632,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       {/* SUB-TAB 3: GARAGE OCCUPANCY & CALENDAR SCHEDULER */}
       {activeSubTab === 'garages_calendar' && (
         <div className="space-y-5">
+          
+          {/* 🔥 جدول طلبات الفحص الفني الجديد */}
+          <AdminInspectionRequestsTable requests={inspectionRequests} />
+
           {/* Garage Occupancy Chart (Recharts) */}
           <GarageOccupancyChart
             garages={garages}

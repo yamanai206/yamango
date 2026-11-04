@@ -20,13 +20,30 @@ import {
   Sparkles
 } from 'lucide-react';
 import { compressImage, POPULAR_VEHICLE_PHOTO_PRESETS } from '../utils/imageCompressor';
+import { supabase } from '../lib/supabase'; // استيراد Supabase
 
 interface NewListingModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentUser: User;
-  onAddListing: (newListing: Omit<Listing, 'id' | 'createdAt' | 'viewsCount' | 'clicksCount' | 'inquiriesCount'>) => Listing;
+  onAddListing: (newListing: Omit<Listing, 'id' | 'createdAt' | 'viewsCount' | 'clicksCount' | 'inquiriesCount'>) => Promise<Listing | null>;
 }
+
+// دالة مساعدة لتحويل Base64 إلى Blob لرفعه إلى Supabase
+const base64ToBlob = (base64Data: string) => {
+  const byteCharacters = atob(base64Data.split(',')[1]);
+  const byteArrays = [];
+  for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+    const slice = byteCharacters.slice(offset, offset + 512);
+    const byteNumbers = new Array(slice.length);
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    byteArrays.push(byteArray);
+  }
+  return new Blob(byteArrays, { type: 'image/jpeg' });
+};
 
 export const NewListingModal: React.FC<NewListingModalProps> = ({
   isOpen,
@@ -59,6 +76,7 @@ export const NewListingModal: React.FC<NewListingModalProps> = ({
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [isCompressing, setIsCompressing] = useState(false);
+  const [isUploadingToCloud, setIsUploadingToCloud] = useState(false);
   const [compressionProgress, setCompressionProgress] = useState('');
 
   // File input references
@@ -93,9 +111,8 @@ export const NewListingModal: React.FC<NewListingModalProps> = ({
     }
 
     setUploadedImages((prev) => {
-      // Limit to 10 photos total to preserve state health
       const combined = [...prev, ...newCompressedImages];
-      return combined.slice(0, 10);
+      return combined.slice(0, 5); // حد أقصى 5 صور لتسريع الرفع
     });
 
     setIsCompressing(false);
@@ -103,29 +120,25 @@ export const NewListingModal: React.FC<NewListingModalProps> = ({
   };
 
   const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      handleProcessFiles(e.target.files);
-    }
+    if (e.target.files) handleProcessFiles(e.target.files);
     e.target.value = '';
   };
 
   const handleGalleryUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      handleProcessFiles(e.target.files);
-    }
+    if (e.target.files) handleProcessFiles(e.target.files);
     e.target.value = '';
   };
 
   const handleAddImageUrl = () => {
     const trimmed = imageUrlInput.trim();
     if (!trimmed) return;
-    setUploadedImages((prev) => [...prev, trimmed].slice(0, 10));
+    setUploadedImages((prev) => [...prev, trimmed].slice(0, 5));
     setImageUrlInput('');
   };
 
   const handleSelectPreset = (presetUrl: string) => {
     if (!uploadedImages.includes(presetUrl)) {
-      setUploadedImages((prev) => [...prev, presetUrl].slice(0, 10));
+      setUploadedImages((prev) => [...prev, presetUrl].slice(0, 5));
     }
   };
 
@@ -141,53 +154,91 @@ export const NewListingModal: React.FC<NewListingModalProps> = ({
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
 
-    // Default image based on category if user didn't supply any
-    let defaultImg = 'https://images.unsplash.com/photo-1592860956372-16e45c083c71?auto=format&fit=crop&w=800&q=80';
-    if (category === 'cars') defaultImg = 'https://images.unsplash.com/photo-1559416523-140ddc3d238c?auto=format&fit=crop&w=800&q=80';
-    if (category === 'excavators') defaultImg = 'https://images.unsplash.com/photo-1578328819058-b69f3a3b0f6b?auto=format&fit=crop&w=800&q=80';
-    if (category === 'trucks') defaultImg = 'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=800&q=80';
+    try {
+      setIsUploadingToCloud(true);
+      const finalCloudUrls: string[] = [];
 
-    onAddListing({
-      userId: currentUser.id,
-      sellerName: currentUser.fullName,
-      sellerPhone: currentUser.phone,
-      sellerRating: 5.0,
-      title,
-      category,
-      subCategory: (subCategory === 'other' ? customSubCategory : subCategory).trim() || undefined,
-      operation,
-      make,
-      model,
-      year,
-      metricType,
-      metricValue,
-      priceAmount,
-      currency,
-      rentRateUnit: operation === 'rent' ? rentRateUnit : undefined,
-      rentRateAmount: operation === 'rent' ? priceAmount : undefined,
-      hasDriverOption,
-      driverFeePerDay: hasDriverOption ? 60000 : 0,
-      securityDeposit: operation === 'rent' ? 1000000 : undefined,
-      zone,
-      locationDetails,
-      images: uploadedImages.length > 0 ? uploadedImages : [defaultImg],
-      chassisNumber,
-      ownershipVerified: true,
-      gpsTrackingEnabled,
-      gpsDeviceId: gpsTrackingEnabled ? (gpsDeviceId.trim() || `GPS-SWD-${Math.floor(1000 + Math.random() * 9000)}`) : undefined,
-      gpsLastPing: gpsTrackingEnabled ? 'موقع الآلية محدّث ومقترن بنجاح' : undefined,
-      gpsBatteryLevel: gpsTrackingEnabled ? 95 : undefined,
-      serviceNotes: serviceNotes.trim() || undefined,
-      inspectionStatus: 'none',
-      isPromoted: false,
-      status: 'active',
-    });
+      // 1. رفع الصور الحقيقية إلى Supabase Storage
+      for (const img of uploadedImages) {
+        if (img.startsWith('data:image')) {
+          // إذا كانت الصورة Base64 (من الكاميرا/المعرض)
+          const blob = base64ToBlob(img);
+          const fileName = `listing_${Date.now()}_${Math.random().toString(36).substring(7)}.jpeg`;
+          
+          const { data, error } = await supabase.storage
+            .from('listings-images')
+            .upload(fileName, blob, { contentType: 'image/jpeg', upsert: false });
 
-    onClose();
+          if (error) throw error;
+
+          // الحصول على الرابط العام للصورة
+          const { data: urlData } = supabase.storage
+            .from('listings-images')
+            .getPublicUrl(data.path);
+            
+          finalCloudUrls.push(urlData.publicUrl);
+        } else {
+          // إذا كان رابطاً خارجياً (URL)
+          finalCloudUrls.push(img);
+        }
+      }
+
+      // إذا لم يضع المستخدم أي صورة، نضع صورة افتراضية
+      let defaultImg = 'https://images.unsplash.com/photo-1592860956372-16e45c083c71?auto=format&fit=crop&w=800&q=80';
+      if (category === 'cars') defaultImg = 'https://images.unsplash.com/photo-1559416523-140ddc3d238c?auto=format&fit=crop&w=800&q=80';
+      if (category === 'excavators') defaultImg = 'https://images.unsplash.com/photo-1578328819058-b69f3a3b0f6b?auto=format&fit=crop&w=800&q=80';
+      if (category === 'trucks') defaultImg = 'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=800&q=80';
+
+      // 2. إرسال بيانات الإعلان إلى المتجر (Store)
+      const success = await onAddListing({
+        userId: currentUser.id,
+        sellerName: currentUser.fullName,
+        sellerPhone: currentUser.phone,
+        sellerRating: 5.0,
+        title,
+        category,
+        subCategory: (subCategory === 'other' ? customSubCategory : subCategory).trim() || undefined,
+        operation,
+        make,
+        model,
+        year,
+        metricType,
+        metricValue,
+        priceAmount,
+        currency,
+        rentRateUnit: operation === 'rent' ? rentRateUnit : undefined,
+        rentRateAmount: operation === 'rent' ? priceAmount : undefined,
+        hasDriverOption,
+        driverFeePerDay: hasDriverOption ? 60000 : 0,
+        securityDeposit: operation === 'rent' ? 1000000 : undefined,
+        zone,
+        locationDetails,
+        images: finalCloudUrls.length > 0 ? finalCloudUrls : [defaultImg],
+        chassisNumber,
+        ownershipVerified: true,
+        gpsTrackingEnabled,
+        gpsDeviceId: gpsTrackingEnabled ? (gpsDeviceId.trim() || `GPS-SWD-${Math.floor(1000 + Math.random() * 9000)}`) : undefined,
+        gpsLastPing: gpsTrackingEnabled ? 'موقع الآلية محدّث ومقترن بنجاح' : undefined,
+        gpsBatteryLevel: gpsTrackingEnabled ? 95 : undefined,
+        serviceNotes: serviceNotes.trim() || undefined,
+        inspectionStatus: 'none',
+        isPromoted: false,
+        status: 'active',
+      });
+
+      if (success) {
+        onClose();
+      }
+    } catch (error: any) {
+      console.error('Error during upload/submit:', error);
+      alert('حدث خطأ أثناء رفع الصور أو حفظ الإعلان: ' + error.message);
+    } finally {
+      setIsUploadingToCloud(false);
+    }
   };
 
   return (
@@ -195,7 +246,7 @@ export const NewListingModal: React.FC<NewListingModalProps> = ({
       <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
           <div className="flex items-center gap-2">
-            <span className="p-2 bg-amber-100 text-amber-800 rounded-xl">
+            <span className="p-2 bg-orange-100 text-orange-800 rounded-xl">
               <Camera className="w-5 h-5" />
             </span>
             <div>
@@ -258,18 +309,14 @@ export const NewListingModal: React.FC<NewListingModalProps> = ({
             </div>
 
             <div>
-              <label className="font-bold text-slate-700 block mb-1">
-                النوع الفرعي (Sub-category):
-              </label>
+              <label className="font-bold text-slate-700 block mb-1">النوع الفرعي:</label>
               <select
                 value={subCategory}
                 onChange={(e) => setSubCategory(e.target.value)}
-                className="w-full px-3 py-2 bg-amber-50/70 border border-amber-300 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-amber-500"
+                className="w-full px-3 py-2 bg-orange-50/70 border border-orange-300 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-orange-500"
               >
                 {(SUB_CATEGORIES_BY_CATEGORY[category] || []).map((sub) => (
-                  <option key={sub} value={sub}>
-                    {sub}
-                  </option>
+                  <option key={sub} value={sub}>{sub}</option>
                 ))}
                 <option value="other">نوع آخر (إدخال يدوي)...</option>
               </select>
@@ -277,17 +324,15 @@ export const NewListingModal: React.FC<NewListingModalProps> = ({
           </div>
 
           {subCategory === 'other' && (
-            <div className="bg-amber-50/60 p-2.5 rounded-xl border border-amber-200 space-y-1 animate-in fade-in">
-              <label className="text-[11px] font-bold text-amber-900 block">
-                اكتب النوع الفرعي بدقة (مثال: شاحنة قلابة، حفارة مجنزرة، رافعة شوكية):
-              </label>
+            <div className="bg-orange-50/60 p-2.5 rounded-xl border border-orange-200 space-y-1 animate-in fade-in">
+              <label className="text-[11px] font-bold text-orange-900 block">اكتب النوع الفرعي بدقة:</label>
               <input
                 type="text"
                 required
                 value={customSubCategory}
                 onChange={(e) => setCustomSubCategory(e.target.value)}
-                placeholder="اكتب النوع الفرعي للآلية..."
-                className="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-xs"
+                placeholder="مثال: شاحنة قلابة، حفارة مجنزرة، رافعة شوكية..."
+                className="w-full px-3 py-1.5 bg-white border border-orange-300 rounded-lg text-xs"
               />
             </div>
           )}
@@ -308,146 +353,83 @@ export const NewListingModal: React.FC<NewListingModalProps> = ({
           {/* Make, Model, Year */}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="font-bold text-slate-700 block mb-1">الماركة (الشركة):</label>
-              <input
-                type="text"
-                required
-                value={make}
-                onChange={(e) => setMake(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
-              />
+              <label className="font-bold text-slate-700 block mb-1">الماركة:</label>
+              <input type="text" required value={make} onChange={(e) => setMake(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl" />
             </div>
             <div>
-              <label className="font-bold text-slate-700 block mb-1">الموديل والطراز:</label>
-              <input
-                type="text"
-                required
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
-              />
+              <label className="font-bold text-slate-700 block mb-1">الموديل:</label>
+              <input type="text" required value={model} onChange={(e) => setModel(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl" />
             </div>
             <div>
               <label className="font-bold text-slate-700 block mb-1">سنة الصنع:</label>
-              <input
-                type="number"
-                min="1980"
-                max="2027"
-                required
-                value={year}
-                onChange={(e) => setYear(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
-              />
+              <input type="number" min="1980" max="2026" required value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl" />
             </div>
           </div>
 
           {/* Hours/Km and Price */}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="font-bold text-slate-700 block mb-1">
-                {metricType === 'work_hours' ? 'ساعات العمل:' : 'المسافة (كم):'}
-              </label>
-              <input
-                type="number"
-                required
-                value={metricValue}
-                onChange={(e) => setMetricValue(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono"
-              />
+              <label className="font-bold text-slate-700 block mb-1">{metricType === 'work_hours' ? 'ساعات العمل:' : 'المسافة (كم):'}</label>
+              <input type="number" required value={metricValue} onChange={(e) => setMetricValue(Number(e.target.value))} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono" />
             </div>
-
             <div>
-              <label className="font-bold text-slate-700 block mb-1">
-                {operation === 'sale' ? 'السعر المطلوب:' : 'بدل الإيجار:'}
-              </label>
-              <input
-                type="number"
-                required
-                value={priceAmount}
-                onChange={(e) => setPriceAmount(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
-              />
+              <label className="font-bold text-slate-700 block mb-1">{operation === 'sale' ? 'السعر المطلوب:' : 'بدل الإيجار:'}</label>
+              <input type="number" required value={priceAmount} onChange={(e) => setPriceAmount(Number(e.target.value))} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold" />
             </div>
-
             <div>
               <label className="font-bold text-slate-700 block mb-1">العملة:</label>
-              <select
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value as any)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
-              >
+              <select value={currency} onChange={(e) => setCurrency(e.target.value as any)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold">
                 <option value="USD">دولار أمريكي ($)</option>
                 <option value="SYP">ليرة سورية (SYP)</option>
               </select>
             </div>
           </div>
 
-          {/* ========================================================================= */}
-          {/* VEHICLE PHOTOS UPLOAD & CAMERA SECTION (FEATURE HIGHLIGHT) */}
-          {/* ========================================================================= */}
-          <div className="bg-gradient-to-b from-amber-50/50 to-slate-50 border-2 border-amber-300/80 rounded-2xl p-4 space-y-3.5 shadow-2xs">
+          {/* VEHICLE PHOTOS UPLOAD SECTION */}
+          <div className="bg-gradient-to-b from-orange-50/50 to-slate-50 border-2 border-orange-300/80 rounded-2xl p-4 space-y-3.5 shadow-2xs">
             <div className="flex items-center justify-between">
               <label className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5">
-                <Camera className="w-4 h-4 text-amber-600" />
-                <span>صور الآلية / المركبة الحقيقية ({uploadedImages.length} صور مضافة)</span>
+                <Camera className="w-4 h-4 text-orange-600" />
+                <span>صور الآلية الحقيقية ({uploadedImages.length} صور مضافة)</span>
               </label>
               <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
-                الصور تظهر مباشرة في البطاقة والتفاصيل
+                سيتم رفع الصور للسحابة فوراً
               </span>
             </div>
 
-            {/* Hidden Input Elements for Camera and File Picker */}
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleCameraCapture}
-              className="hidden"
-            />
-            <input
-              ref={galleryInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleGalleryUpload}
-              className="hidden"
-            />
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleCameraCapture} className="hidden" />
+            <input ref={galleryInputRef} type="file" accept="image/*" multiple onChange={handleGalleryUpload} className="hidden" />
 
-            {/* Primary Action Buttons: Camera + Gallery */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {/* Direct Camera Capture Button */}
               <button
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
-                disabled={isCompressing}
-                className="flex items-center justify-center gap-2 p-3.5 bg-amber-600 hover:bg-amber-700 active:scale-98 text-white rounded-xl shadow-xs transition-all cursor-pointer font-bold text-xs"
+                disabled={isCompressing || isUploadingToCloud}
+                className="flex items-center justify-center gap-2 p-3.5 bg-orange-600 hover:bg-orange-700 active:scale-98 text-white rounded-xl shadow-xs transition-all cursor-pointer font-bold text-xs disabled:opacity-50"
               >
                 <Camera className="w-4 h-4 shrink-0" />
-                <span>التقاط بالكاميرا مباشرة (Camera)</span>
+                <span>التقاط بالكاميرا مباشرة</span>
               </button>
 
-              {/* Gallery / File Picker Button */}
               <button
                 type="button"
                 onClick={() => galleryInputRef.current?.click()}
-                disabled={isCompressing}
-                className="flex items-center justify-center gap-2 p-3.5 bg-white hover:bg-slate-50 border-2 border-dashed border-amber-300 hover:border-amber-500 text-slate-800 rounded-xl transition-all cursor-pointer font-bold text-xs"
+                disabled={isCompressing || isUploadingToCloud}
+                className="flex items-center justify-center gap-2 p-3.5 bg-white hover:bg-slate-50 border-2 border-dashed border-orange-300 hover:border-orange-500 text-slate-800 rounded-xl transition-all cursor-pointer font-bold text-xs disabled:opacity-50"
               >
-                <Upload className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>اختيار من ألبوم الصور / الجهاز</span>
+                <Upload className="w-4 h-4 text-orange-600 shrink-0" />
+                <span>اختيار من ألبوم الصور</span>
               </button>
             </div>
 
-            {/* Compression Loading Feedback */}
             {isCompressing && (
-              <div className="flex items-center justify-center gap-2 p-2 bg-amber-100/80 rounded-xl text-amber-900 font-semibold text-xs animate-pulse">
-                <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
-                <span>{compressionProgress || 'جاري معالجة وضغط الصور لتسريع التصفح...'}</span>
+              <div className="flex items-center justify-center gap-2 p-2 bg-orange-100/80 rounded-xl text-orange-900 font-semibold text-xs animate-pulse">
+                <Loader2 className="w-4 h-4 animate-spin text-orange-600" />
+                <span>{compressionProgress || 'جاري معالجة الصور...'}</span>
               </div>
             )}
 
-            {/* Optional URL input & Quick Presets */}
+            {/* Optional URL input */}
             <div className="pt-1 border-t border-slate-200/80 space-y-2">
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
@@ -456,106 +438,41 @@ export const NewListingModal: React.FC<NewListingModalProps> = ({
                     type="url"
                     value={imageUrlInput}
                     onChange={(e) => setImageUrlInput(e.target.value)}
-                    placeholder="أو الصق رابط صورة خارجية (URL)..."
-                    className="w-full pr-8 pl-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-amber-400"
+                    placeholder="أو الصق رابط صورة خارجية..."
+                    className="w-full pr-8 pl-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-orange-400"
                   />
                 </div>
-                <button
-                  type="button"
-                  onClick={handleAddImageUrl}
-                  disabled={!imageUrlInput.trim()}
-                  className="px-3 py-1.5 text-xs bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white rounded-lg font-bold shrink-0 cursor-pointer"
-                >
-                  إضافة الرابط
+                <button type="button" onClick={handleAddImageUrl} disabled={!imageUrlInput.trim()} className="px-3 py-1.5 text-xs bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white rounded-lg font-bold shrink-0">
+                  إضافة
                 </button>
-              </div>
-
-              {/* Popular Presets Quick Pick */}
-              <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                <span className="text-[10px] text-slate-500 font-medium flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-amber-500" />
-                  <span>صور جاهزة سريعة:</span>
-                </span>
-                {POPULAR_VEHICLE_PHOTO_PRESETS.map((preset, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => handleSelectPreset(preset.url)}
-                    className="text-[10px] px-2 py-0.5 rounded-md bg-white hover:bg-amber-100 border border-slate-200 text-slate-700 font-medium transition-colors cursor-pointer"
-                    title={preset.description}
-                  >
-                    + {preset.title.split(' ')[0]} {preset.title.split(' ')[1]}
-                  </button>
-                ))}
               </div>
             </div>
 
-            {/* Image Previews Thumbnails Grid */}
-            {uploadedImages.length > 0 ? (
+            {/* Image Previews */}
+            {uploadedImages.length > 0 && (
               <div className="space-y-1.5 pt-2 border-t border-slate-200/80">
                 <div className="flex items-center justify-between text-[11px] text-slate-600">
-                  <span className="font-bold">
-                    معاينة الصور ({uploadedImages.length}): الصورة الأولى هي صورة الغلاف الرئيسية
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setUploadedImages([])}
-                    className="text-rose-600 hover:underline cursor-pointer text-[10px] font-semibold"
-                  >
-                    مسح كافة الصور
-                  </button>
+                  <span className="font-bold">الصورة الأولى هي الغلاف الرئيسي</span>
+                  <button type="button" onClick={() => setUploadedImages([])} className="text-rose-600 hover:underline text-[10px] font-semibold">مسح كافة الصور</button>
                 </div>
-
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
                   {uploadedImages.map((img, idx) => (
-                    <div
-                      key={idx}
-                      className={`relative group rounded-xl overflow-hidden aspect-square border-2 transition-all ${
-                        idx === 0 ? 'border-amber-500 ring-2 ring-amber-500/40 shadow-xs' : 'border-slate-200 bg-slate-100'
-                      }`}
-                    >
-                      <img 
-                        src={img} 
-                        alt={`صورة الآلية ${idx + 1}`} 
-                        className="w-full h-full object-cover" 
-                      />
-                      
-                      {/* Main Cover Badge */}
+                    <div key={idx} className={`relative group rounded-xl overflow-hidden aspect-square border-2 ${idx === 0 ? 'border-orange-500 ring-2 ring-orange-500/40' : 'border-slate-200'}`}>
+                      <img src={img} alt={`صورة ${idx + 1}`} className="w-full h-full object-cover" />
                       {idx === 0 ? (
-                        <span className="absolute top-1 right-1 bg-amber-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-xs pointer-events-none flex items-center gap-0.5">
+                        <span className="absolute top-1 right-1 bg-orange-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-xs flex items-center gap-0.5">
                           <Star className="w-2.5 h-2.5 fill-white" />
-                          <span>الرئيسية</span>
+                          <span>الغلاف</span>
                         </span>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleSetAsMainImage(idx)}
-                          className="absolute inset-x-0 bottom-0 bg-slate-950/80 text-white opacity-0 group-hover:opacity-100 transition-opacity text-[9px] font-bold py-1 text-center cursor-pointer"
-                          title="تعيين هذه الصورة كغلاف رئيسي للإعلان"
-                        >
-                          تعيين كغلاف
-                        </button>
+                        <button type="button" onClick={() => handleSetAsMainImage(idx)} className="absolute inset-x-0 bottom-0 bg-slate-950/80 text-white opacity-0 group-hover:opacity-100 transition-opacity text-[9px] font-bold py-1 text-center">تعيين كغلاف</button>
                       )}
-
-                      {/* Remove Button */}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveImage(idx)}
-                        className="absolute top-1 left-1 bg-slate-900/80 hover:bg-rose-600 text-white p-1 rounded-md opacity-0 group-hover:opacity-100 transition-all cursor-pointer z-10"
-                        title="حذف الصورة"
-                      >
+                      <button type="button" onClick={() => handleRemoveImage(idx)} className="absolute top-1 left-1 bg-slate-900/80 hover:bg-rose-600 text-white p-1 rounded-md opacity-0 group-hover:opacity-100 transition-all z-10">
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
                   ))}
                 </div>
-              </div>
-            ) : (
-              <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-xl text-[11px] text-slate-700 flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Info className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>لم ترفق صوراً بعد. اضغط على الكاميرا لالتقاط صورة حية، أو اختر صوراً من جهازك لتبديل الأيقونات التلقائية بصور حقيقية.</span>
-                </span>
               </div>
             )}
           </div>
@@ -563,62 +480,22 @@ export const NewListingModal: React.FC<NewListingModalProps> = ({
           {/* Location and Zone */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="font-bold text-slate-700 block mb-1">المنطقة / الناحية:</label>
-              <select
-                value={zone}
-                onChange={(e) => setZone(e.target.value as any)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
-              >
-                <option value="al_kafr">بلدة الكفر (مركز الانطلاق)</option>
+              <label className="font-bold text-slate-700 block mb-1">المنطقة:</label>
+              <select value={zone} onChange={(e) => setZone(e.target.value as any)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold">
+                <option value="al_kafr">بلدة الكفر (المركز)</option>
                 <option value="suwayda">السويداء (المدينة)</option>
                 <option value="shahba">شهبا</option>
                 <option value="salkhad">صلخد</option>
                 <option value="al_qurayya">القريّا</option>
               </select>
             </div>
-
             <div>
-              <label className="font-bold text-slate-700 block mb-1">تفاصيل الموقع والمعالم:</label>
-              <input
-                type="text"
-                value={locationDetails}
-                onChange={(e) => setLocationDetails(e.target.value)}
-                placeholder="مثال: الكفر - قرب دوار الساحة"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
-              />
+              <label className="font-bold text-slate-700 block mb-1">تفاصيل الموقع:</label>
+              <input type="text" value={locationDetails} onChange={(e) => setLocationDetails(e.target.value)} placeholder="مثال: الكفر - قرب دوار الساحة" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl" />
             </div>
           </div>
 
-          {/* Chassis verification */}
-          <div>
-            <label className="font-bold text-slate-700 block mb-1">رقم الهيكل (الشاسيه):</label>
-            <input
-              type="text"
-              value={chassisNumber}
-              onChange={(e) => setChassisNumber(e.target.value)}
-              placeholder="يُحفظ في السجل لمنع تكرار الإعلانات الوهمية"
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono uppercase"
-            />
-          </div>
-
-          {/* Service & Maintenance Notes */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="font-bold text-slate-700 block text-xs">
-                ملاحظات الخدمة والصيانة الدورية (سجل الصيانة):
-              </label>
-              <span className="text-[10px] text-slate-400">اختياري - يعزز ثقة المشتري</span>
-            </div>
-            <textarea
-              rows={2}
-              value={serviceNotes}
-              onChange={(e) => setServiceNotes(e.target.value)}
-              placeholder="مثال: تم تبديل زيت المحرك وفلاتر الديزل الأصلية حديثاً، فحص ضغط الهيدروليك، بطارية وإطارات جديدة..."
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-amber-500 text-xs"
-            />
-          </div>
-
-          {/* GPS Tracking for machinery & rentals */}
+          {/* GPS Tracking */}
           <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-2xl space-y-3">
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -628,66 +505,48 @@ export const NewListingModal: React.FC<NewListingModalProps> = ({
                   onChange={(e) => {
                     const checked = e.target.checked;
                     setGpsTrackingEnabled(checked);
-                    if (checked && !gpsDeviceId) {
-                      setGpsDeviceId(`GPS-SWD-${Math.floor(1000 + Math.random() * 9000)}`);
-                    }
+                    if (checked && !gpsDeviceId) setGpsDeviceId(`GPS-SWD-${Math.floor(1000 + Math.random() * 9000)}`);
                   }}
                   className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
                 />
                 <span className="font-bold text-blue-950 flex items-center gap-1.5">
                   <Radio className={`w-4 h-4 text-blue-600 ${gpsTrackingEnabled ? 'animate-pulse' : ''}`} />
-                  تفعيل تتبع GPS للآلية (موصى به للآليات المؤجرة والمعدات الثقيلة)
+                  تفعيل تتبع GPS للآلية
                 </span>
               </label>
-
-              <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
-                حماية وإسكرو
-              </span>
             </div>
-
             {gpsTrackingEnabled && (
               <div className="space-y-1.5 pt-2 border-t border-blue-200/60 animate-in fade-in">
-                <label className="font-bold text-slate-800 text-[11px] block">
-                  رقم جهاز التتبع (GPS Device ID / IMEI):
-                </label>
-                <div className="relative">
-                  <Cpu className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={gpsDeviceId}
-                    onChange={(e) => setGpsDeviceId(e.target.value)}
-                    placeholder="مثال: GPS-SWD-4912 أو IMEI: 862910482910482"
-                    className="w-full pr-9 pl-3 py-2 bg-white border border-blue-300 rounded-xl font-mono text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
-                  />
-                </div>
-                <p className="text-[10px] text-blue-800 leading-relaxed">
-                  يُثبّت رقم جهاز التتبع تلقائياً في العقد الإلكتروني لحماية الآلية من السرقة أو الخروج عن النطاق الجغرافي المحدد في محافظة السويداء.
-                </p>
+                <label className="font-bold text-slate-800 text-[11px] block">رقم جهاز التتبع:</label>
+                <input
+                  type="text"
+                  value={gpsDeviceId}
+                  onChange={(e) => setGpsDeviceId(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-blue-300 rounded-xl font-mono text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
+                />
               </div>
             )}
           </div>
 
-          <div className="p-3 bg-emerald-50 text-emerald-900 border border-emerald-200 rounded-xl flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
-            <span>
-              يحق للمشتري طلب فحص الآلية في كراج معتمد قبل الشراء. جميع الصفقات تتم بوساطة إسكرو yamango لحمايتك.
-            </span>
-          </div>
-
+          {/* Submit CTA */}
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium"
-            >
-              إلغاء
-            </button>
+            <button type="button" onClick={onClose} disabled={isUploadingToCloud} className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium disabled:opacity-50">إلغاء</button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+              disabled={isUploadingToCloud}
+              className="px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:bg-slate-400 text-white font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5 min-w-[150px] justify-center"
             >
-              <CheckCircle className="w-4 h-4" />
-              <span>نشر الإعلان فورياً</span>
+              {isUploadingToCloud ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>جارٍ رفع الصور للسحابة...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4" />
+                  <span>نشر الإعلان فورياً</span>
+                </>
+              )}
             </button>
           </div>
         </form>

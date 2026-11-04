@@ -54,7 +54,7 @@ export function computeEscrowJourney(deal: Deal): EscrowJourneyProgress {
     stepNumber: 1,
     timestamp: deal.contract?.signedAt || new Date(deal.createdAt).toLocaleDateString('ar-SY'),
     actingParty: `${deal.buyerName} و ${deal.sellerName}`,
-    detailsSummary: `تم توثيق العقد الإلكتروني رقم ${deal.contract?.contractNumber || 'YMG-2026'} بمبلغ ${deal.agreedPrice.toLocaleString()} ${deal.currency}.`,
+    detailsSummary: `تم توثيق العقد الإلكتروني رقم ${deal.contract?.contractNumber || 'YMG-2026'} بمبلغ ${(deal.agreedPrice || 0).toLocaleString()} ${deal.currency || 'USD'}.`,
     relevantTab: 'contract',
   };
 

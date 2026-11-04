@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { Listing, User, Deal } from '../types';
 import { calculateEscrowCommission } from '../utils/escrow';
-import { X, ShieldCheck, CheckCircle2, Lock, FileText, Banknote, Radio } from 'lucide-react';
+import { X, ShieldCheck, CheckCircle2, Lock, FileText, Banknote, Radio, Loader2 } from 'lucide-react';
 
 interface StartDealModalProps {
   listing: Listing | null;
   onClose: () => void;
   currentUser: User;
-  onConfirmDeal: (listingId: string, offerPrice: number) => Deal | null;
+  onConfirmDeal: (listingId: string, offerPrice: number) => Promise<Deal | null>;
   onDealCreated: (deal: Deal) => void;
 }
 
@@ -19,6 +19,7 @@ export const StartDealModal: React.FC<StartDealModalProps> = ({
   onDealCreated,
 }) => {
   const [offerPrice, setOfferPrice] = useState(listing?.priceAmount || 0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!listing) return null;
 
@@ -29,12 +30,19 @@ export const StartDealModal: React.FC<StartDealModalProps> = ({
     currentUser.dealsCompletedCount
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const deal = onConfirmDeal(listing.id, offerPrice);
-    if (deal) {
-      onDealCreated(deal);
-      onClose();
+    setIsSubmitting(true);
+    try {
+      const deal = await onConfirmDeal(listing.id, offerPrice);
+      if (deal) {
+        onDealCreated(deal);
+        onClose();
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -43,7 +51,7 @@ export const StartDealModal: React.FC<StartDealModalProps> = ({
       <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 text-xs">
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-amber-600 text-white flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-xl bg-orange-600 text-white flex items-center justify-center font-bold">
               <ShieldCheck className="w-4 h-4" />
             </div>
             <div>
@@ -54,7 +62,7 @@ export const StartDealModal: React.FC<StartDealModalProps> = ({
             </div>
           </div>
 
-          <button onClick={onClose} className="p-1 rounded-full text-slate-400 hover:text-slate-700">
+          <button onClick={onClose} disabled={isSubmitting} className="p-1 rounded-full text-slate-400 hover:text-slate-700 disabled:opacity-50">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -74,27 +82,27 @@ export const StartDealModal: React.FC<StartDealModalProps> = ({
                 onChange={(e) => setOfferPrice(Number(e.target.value))}
                 className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-base font-extrabold text-slate-900 tabular-nums"
               />
-              <span className="font-bold text-amber-700 text-sm whitespace-nowrap">
+              <span className="font-bold text-orange-700 text-sm whitespace-nowrap">
                 {listing.currency}
               </span>
             </div>
           </div>
 
           {/* Breakdown Card */}
-          <div className="space-y-2 bg-amber-50/70 border border-amber-200 rounded-2xl p-4">
+          <div className="space-y-2 bg-orange-50/70 border border-orange-200 rounded-2xl p-4">
             <div className="flex justify-between items-center text-slate-700">
               <span>عربون الإسكرو المطلوب إيداعه لدى الوكيل (10%):</span>
-              <strong className="text-amber-900 font-mono font-bold text-sm">
+              <strong className="text-orange-900 font-mono font-bold text-sm">
                 {calc.depositRequired.toLocaleString()} {listing.currency}
               </strong>
             </div>
 
-            <div className="flex justify-between items-center text-slate-600 pt-1 border-t border-amber-200/60">
+            <div className="flex justify-between items-center text-slate-600 pt-1 border-t border-orange-200/60">
               <span>عمولة منصة yamango ({(calc.commissionRate * 100).toFixed(1)}%):</span>
               <span className="font-mono">{calc.commissionAmount.toLocaleString()} {listing.currency}</span>
             </div>
 
-            <div className="flex justify-between items-center text-slate-900 font-bold pt-1 border-t border-amber-200/60">
+            <div className="flex justify-between items-center text-slate-900 font-bold pt-1 border-t border-orange-200/60">
               <span>صافي المستحق للبائع عند الاستلام:</span>
               <span className="font-mono text-emerald-800 font-bold">
                 {calc.sellerNetPayout.toLocaleString()} {listing.currency}
@@ -126,16 +134,27 @@ export const StartDealModal: React.FC<StartDealModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium"
+              disabled={isSubmitting}
+              className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium disabled:opacity-50"
             >
               إلغاء
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-xs transition-colors flex items-center gap-1.5"
+              disabled={isSubmitting}
+              className="px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold shadow-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 min-w-[150px]"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>تأكيد وإنشاء العقد الإلكتروني</span>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>جارٍ إنشاء العقد...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>تأكيد وإنشاء العقد</span>
+                </>
+              )}
             </button>
           </div>
         </form>

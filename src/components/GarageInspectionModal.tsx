@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GarageProfile, Listing } from '../types';
-import { X, ShieldCheck, Calendar, Clock, DollarSign, CheckCircle2 } from 'lucide-react';
+import { X, ShieldCheck, Calendar, Clock, DollarSign, CheckCircle2, Loader2 } from 'lucide-react';
 
 interface GarageInspectionModalProps {
   isOpen: boolean;
@@ -8,7 +8,7 @@ interface GarageInspectionModalProps {
   listing?: Listing | null;
   selectedGarage?: GarageProfile | null;
   garages: GarageProfile[];
-  onRequestInspection: (listingId: string, garageId: string, requestedDate: string) => void;
+  onRequestInspection: (listingId: string, garageId: string, requestedDate: string) => Promise<any>;
 }
 
 export const GarageInspectionModal: React.FC<GarageInspectionModalProps> = ({
@@ -24,21 +24,34 @@ export const GarageInspectionModal: React.FC<GarageInspectionModalProps> = ({
     new Date(Date.now() + 24 * 3600 * 1000).toISOString().split('T')[0]
   );
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen || !listing) return null;
 
   const currentGarage = garages.find((g) => g.id === targetGarageId) || garages[0];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!targetGarageId) return;
+    if (!targetGarageId) {
+      alert("يرجى اختيار كراج أولاً");
+      return;
+    }
 
-    onRequestInspection(listing.id, targetGarageId, appointmentDate);
-    setIsSuccess(true);
-    setTimeout(() => {
-      setIsSuccess(false);
-      onClose();
-    }, 1500);
+    setIsSubmitting(true);
+    try {
+      const res = await onRequestInspection(listing.id, targetGarageId, appointmentDate);
+      if (res) {
+        setIsSuccess(true);
+        setTimeout(() => {
+          setIsSuccess(false);
+          onClose();
+        }, 1500);
+      }
+    } catch (err: any) {
+      // الأخطاء يتم التعامل معها في المتجر (Store) عبر التنبيه
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -57,7 +70,7 @@ export const GarageInspectionModal: React.FC<GarageInspectionModalProps> = ({
             </div>
           </div>
 
-          <button onClick={onClose} className="p-1 rounded-full text-slate-400 hover:text-slate-700">
+          <button onClick={onClose} disabled={isSubmitting} className="p-1 rounded-full text-slate-400 hover:text-slate-700 disabled:opacity-50">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -70,6 +83,7 @@ export const GarageInspectionModal: React.FC<GarageInspectionModalProps> = ({
               value={targetGarageId}
               onChange={(e) => setTargetGarageId(e.target.value)}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
+              disabled={isSubmitting}
             >
               {garages.map((g) => (
                 <option key={g.id} value={g.id}>
@@ -88,6 +102,7 @@ export const GarageInspectionModal: React.FC<GarageInspectionModalProps> = ({
               value={appointmentDate}
               onChange={(e) => setAppointmentDate(e.target.value)}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -116,16 +131,22 @@ export const GarageInspectionModal: React.FC<GarageInspectionModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium"
+                disabled={isSubmitting}
+                className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium disabled:opacity-50"
               >
                 إلغاء
               </button>
               <button
                 type="submit"
-                className="px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold shadow-xs transition-colors flex items-center gap-1.5"
+                disabled={isSubmitting}
+                className="px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50 min-w-[140px] justify-center"
               >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>تأكيد حجز موعد الفحص</span>
+                {isSubmitting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
+                )}
+                <span>{isSubmitting ? 'جارٍ الحجز...' : 'تأكيد حجز موعد الفحص'}</span>
               </button>
             </div>
           )}

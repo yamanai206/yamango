@@ -25,6 +25,7 @@ import { PushNotificationModal } from './components/PushNotificationModal';
 import { ListingInteractiveMap } from './components/ListingInteractiveMap';
 import { UsedGoodsMarketplaceView } from './components/UsedGoodsMarketplaceView';
 import { LoginScreen } from './components/LoginScreen';
+import { GarageDashboardView } from './components/GarageDashboardView'; // 🔥 استيراد لوحة الكراج
 import { 
   registerServiceWorker, 
   initServiceWorkerMessageListener, 
@@ -141,6 +142,16 @@ export default function App() {
     };
   }, [store.rawListings]);
 
+  // 🔥 مزامنة الصفقة المفتوحة (activeDeal) مع أي تحديث يحدث في قاعدة البيانات
+  useEffect(() => {
+    if (activeDeal) {
+      const updatedDeal = store.deals.find(d => d.id === activeDeal.id);
+      if (updatedDeal && JSON.stringify(updatedDeal) !== JSON.stringify(activeDeal)) {
+        setActiveDeal(updatedDeal);
+      }
+    }
+  }, [store.deals, activeDeal]);
+
   const handleOpenAppointmentModal = (listing: Listing) => {
     setAppointmentTargetListing(listing);
     setIsAppointmentModalOpen(true);
@@ -198,10 +209,52 @@ export default function App() {
     return <LoginScreen />;
   }
 
+  // 🔥 التوجيه المخصص للكراج (Garage Role)
+  if (store.currentUser.roles.includes('garage')) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 pb-20 md:pb-10" dir="rtl">
+        <TopBar
+          currentUser={store.currentUser}
+          activeRole={store.activeRole}
+          onSwitchRole={store.switchRole}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          onOpenNewListing={() => setIsNewListingOpen(true)}
+          onOpenSqlModal={() => setIsSqlModalOpen(true)}
+          onResetData={store.resetToSeedData}
+          onOpenHelpCenter={() => setIsHelpCenterOpen(true)}
+          onOpenPushModal={() => setIsPushModalOpen(true)}
+          language={store.language}
+          onToggleLanguage={() => store.setLanguage(store.language === 'ar' ? 'en' : 'ar')}
+          onLogout={store.logout}
+        />
+        <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <GarageDashboardView
+            currentUser={store.currentUser}
+            garages={store.garages}
+            inspectionRequests={store.inspectionRequests}
+            onSubmitReport={store.submitInspectionReport}
+            onViewReport={handleViewReportById}
+          />
+        </main>
+
+        {/* Modals for Garage */}
+        <InspectionReportViewModal report={viewingReport} onClose={() => setViewingReport(null)} />
+        <HelpCenter isOpen={isHelpCenterOpen} onClose={() => setIsHelpCenterOpen(false)} onOpenContactSupport={() => setIsContactSupportOpen(true)} />
+        <ContactSupportModal isOpen={isContactSupportOpen} onClose={() => setIsContactSupportOpen(false)} currentUser={store.currentUser} />
+        <PushNotificationModal isOpen={isPushModalOpen} onClose={() => setIsPushModalOpen(false)} onOpenDeal={(dealId) => {
+          const found = store.deals.find((d) => d.id === dealId);
+          if (found) setActiveDeal(found);
+        }} />
+      </div>
+    );
+  }
+
   const matchingInspectedCount = store.rawListings.filter(
     (l) => l.inspectionStatus === 'inspected' && matchesFilter(l, { ...store.filter, inspectedOnly: false })
   ).length;
 
+  // --- Main UI for Buyer, Seller, Agent, Admin ---
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 pb-20 md:pb-10">
       <TopBar
