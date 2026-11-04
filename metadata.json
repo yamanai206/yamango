@@ -1,0 +1,6 @@
+{
+  "name": "yamango - منصة السيارات والآليات في السويداء والكفر",
+  "description": "منصة بيع وتأجير السيارات والآليات الثقيلة والزراعية في محافظة السويداء وبلدة الكفر، مع فحص الكراجات المعتمدة ووساطة الضمان المالي.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
