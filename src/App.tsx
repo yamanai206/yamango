@@ -25,7 +25,8 @@ import { PushNotificationModal } from './components/PushNotificationModal';
 import { ListingInteractiveMap } from './components/ListingInteractiveMap';
 import { UsedGoodsMarketplaceView } from './components/UsedGoodsMarketplaceView';
 import { LoginScreen } from './components/LoginScreen';
-import { GarageDashboardView } from './components/GarageDashboardView'; // 🔥 استيراد لوحة الكراج
+import { GarageDashboardView } from './components/GarageDashboardView';
+import { AgentDashboardView } from './components/AgentDashboardView'; // 🔥 استيراد لوحة وكيل الدفع
 import { 
   registerServiceWorker, 
   initServiceWorkerMessageListener, 
@@ -250,11 +251,49 @@ export default function App() {
     );
   }
 
+  // 🔥 التوجيه المخصص لوكيل الدفع (Agent Role)
+  if (store.currentUser.roles.includes('agent')) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 pb-20 md:pb-10" dir="rtl">
+        <TopBar
+          currentUser={store.currentUser}
+          activeRole={store.activeRole}
+          onSwitchRole={store.switchRole}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          onOpenNewListing={() => setIsNewListingOpen(true)}
+          onOpenSqlModal={() => setIsSqlModalOpen(true)}
+          onResetData={store.resetToSeedData}
+          onOpenHelpCenter={() => setIsHelpCenterOpen(true)}
+          onOpenPushModal={() => setIsPushModalOpen(true)}
+          language={store.language}
+          onToggleLanguage={() => store.setLanguage(store.language === 'ar' ? 'en' : 'ar')}
+          onLogout={store.logout}
+        />
+        <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <AgentDashboardView
+            currentUser={store.currentUser}
+            agents={store.agents}
+            deals={store.deals}
+            onConfirmEscrow={store.confirmEscrowByAgent}
+          />
+        </main>
+        {/* Modals for Agent */}
+        <HelpCenter isOpen={isHelpCenterOpen} onClose={() => setIsHelpCenterOpen(false)} onOpenContactSupport={() => setIsContactSupportOpen(true)} />
+        <ContactSupportModal isOpen={isContactSupportOpen} onClose={() => setIsContactSupportOpen(false)} currentUser={store.currentUser} />
+        <PushNotificationModal isOpen={isPushModalOpen} onClose={() => setIsPushModalOpen(false)} onOpenDeal={(dealId) => {
+          const found = store.deals.find((d) => d.id === dealId);
+          if (found) setActiveDeal(found);
+        }} />
+      </div>
+    );
+  }
+
   const matchingInspectedCount = store.rawListings.filter(
     (l) => l.inspectionStatus === 'inspected' && matchesFilter(l, { ...store.filter, inspectedOnly: false })
   ).length;
 
-  // --- Main UI for Buyer, Seller, Agent, Admin ---
+  // --- Main UI for Buyer, Seller, Admin ---
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 pb-20 md:pb-10">
       <TopBar
@@ -469,7 +508,29 @@ export default function App() {
 
         {activeTab === 'admin' && store.currentUser.roles.includes('admin') && (
           <AdminDashboardView
-            listings={store.rawListings} deals={store.deals} garages={store.garages} agents={store.agents} onOpenSqlModal={() => setIsSqlModalOpen(true)} currencyConfig={store.currencyConfig} onUpdateExchangeRate={store.updateExchangeRate} appointments={store.appointments} onBookAppointment={store.bookAppointment} onUpdateAppointmentStatus={store.updateAppointmentStatus} inspectionRequests={store.inspectionRequests} commissionRates={store.commissionRates} onUpdateCommissionRates={store.updateCommissionRates} onAddAgent={store.addPaymentAgent} onRemoveAgent={store.removePaymentAgent} onToggleAgentStatus={store.toggleAgentStatus} onRegenerateOtp={store.regenerateDealOtp} admins={store.admins} auditLogs={store.auditLogs} onToggle2fa={store.toggleAdmin2fa}
+            listings={store.rawListings} 
+            deals={store.deals} 
+            garages={store.garages} 
+            agents={store.agents} 
+            onOpenSqlModal={() => setIsSqlModalOpen(true)} 
+            currencyConfig={store.currencyConfig} 
+            onUpdateExchangeRate={store.updateExchangeRate} 
+            appointments={store.appointments} 
+            onBookAppointment={store.bookAppointment} 
+            onUpdateAppointmentStatus={store.updateAppointmentStatus} 
+            inspectionRequests={store.inspectionRequests} 
+            commissionRates={store.commissionRates} 
+            onUpdateCommissionRates={store.updateCommissionRates} 
+            onAddAgent={store.addPaymentAgent} 
+            onRemoveAgent={store.removePaymentAgent} 
+            onToggleAgentStatus={store.toggleAgentStatus} 
+            onRegenerateOtp={store.regenerateDealOtp} 
+            admins={store.admins} 
+            auditLogs={store.auditLogs} 
+            onToggle2fa={store.toggleAdmin2fa}
+            onUpdateListingStatus={store.updateListingStatus}
+            onDeleteListing={store.deleteListing}
+            onViewListing={(listing) => setSelectedListing(listing)}
           />
         )}
       </main>
@@ -477,7 +538,19 @@ export default function App() {
       <MobileBottomNav activeTab={activeTab} setActiveTab={setActiveTab} dealsCount={store.deals.length} />
 
       {/* MODALS */}
-      <ListingDetailModal listing={selectedListing} onClose={() => setSelectedListing(null)} currentUser={store.currentUser} onRequestInspection={handleOpenInspection} onStartDeal={handleStartDeal} onPromoteListing={handlePromoteClick} onViewReport={handleViewReportById} onBookAppointment={handleOpenAppointmentModal} onUpdateServiceNotes={store.updateListingServiceNotes} />
+      <ListingDetailModal 
+        listing={selectedListing} 
+        onClose={() => setSelectedListing(null)} 
+        currentUser={store.currentUser} 
+        onRequestInspection={handleOpenInspection} 
+        onStartDeal={handleStartDeal} 
+        onPromoteListing={handlePromoteClick} 
+        onViewReport={handleViewReportById} 
+        onBookAppointment={handleOpenAppointmentModal} 
+        onUpdateServiceNotes={store.updateListingServiceNotes} 
+        onUpdateStatus={store.updateListingStatus} 
+        onDeleteListing={store.deleteListing} 
+      />
 
       {isAppointmentModalOpen && (
         <CalendarScheduler isModal={true} onClose={() => setIsAppointmentModalOpen(false)} appointments={store.appointments} onBookAppointment={store.bookAppointment} onUpdateStatus={store.updateAppointmentStatus} preSelectedListing={appointmentTargetListing} allListings={store.rawListings} />

@@ -1,45 +1,20 @@
 import { useState, useEffect } from 'react';
 import { 
-  Listing, 
-  GarageProfile, 
-  PaymentAgent, 
-  Deal, 
-  InspectionRequest, 
-  InspectionReport,
-  User, 
-  UserRole, 
-  ZoneLocation, 
-  ListingCategory, 
-  ListingOperation,
-  PromotionPackage,
-  CurrencyRateConfig,
-  FieldInspectionAppointment,
-  CommissionRatesConfig,
-  AdminSecurityProfile,
-  AuditLogEntry,
-  GarageReview,
-  UsedItem,
-  UsedItemOrder,
+  Listing, GarageProfile, PaymentAgent, Deal, InspectionRequest, InspectionReport,
+  User, UserRole, ZoneLocation, ListingCategory, ListingOperation, PromotionPackage,
+  CurrencyRateConfig, FieldInspectionAppointment, CommissionRatesConfig, AdminSecurityProfile,
+  AuditLogEntry, GarageReview, UsedItem, UsedItemOrder,
 } from '../types';
 import { 
-  SEED_AGENTS, 
-  SEED_PROMOTION_PACKAGES,
-  SEED_APPOINTMENTS,
-  DEFAULT_CURRENCY_CONFIG,
-  DEFAULT_COMMISSION_RATES,
-  SEED_ADMINS,
-  SEED_AUDIT_LOGS,
-  SEED_GARAGE_REVIEWS,
+  SEED_AGENTS, SEED_PROMOTION_PACKAGES, SEED_APPOINTMENTS, DEFAULT_CURRENCY_CONFIG,
+  DEFAULT_COMMISSION_RATES, SEED_ADMINS, SEED_AUDIT_LOGS, SEED_GARAGE_REVIEWS,
 } from './seedData';
-import { SEED_USED_ITEMS, SEED_USED_ORDERS } from './seedUsedItems';
 import { rankListings, ListingFilter } from '../utils/ranking';
 import { calculateEscrowCommission, generateAgentVerificationOtp } from '../utils/escrow';
 import { calculateUsedItemCommission, generateUsedItemOtp, generateUsedOrderId } from '../utils/usedGoods';
 import { supabase } from '../lib/supabase';
 
-const STORAGE_KEY_USED_ITEMS = 'yamango_used_items_v1';
-const STORAGE_KEY_USED_ORDERS = 'yamango_used_orders_v1';
-const STORAGE_KEY_AGENTS = 'yamango_agents_v1';
+// مفاتيح التخزين المحلي للبيانات الثانوية
 const STORAGE_KEY_CURRENCY = 'yamango_currency_v1';
 const STORAGE_KEY_APPOINTMENTS = 'yamango_appointments_v1';
 const STORAGE_KEY_COMMISSION = 'yamango_commission_rates_v1';
@@ -54,17 +29,18 @@ export function useYamangoStore() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
+  // --- Core Entities State ---
   const [listings, setListings] = useState<Listing[]>([]);
   const [isListingsLoading, setIsListingsLoading] = useState<boolean>(true);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [isDealsLoading, setIsDealsLoading] = useState<boolean>(true);
-  
   const [garages, setGarages] = useState<GarageProfile[]>([]);
   const [inspectionRequests, setInspectionRequests] = useState<InspectionRequest[]>([]);
+  const [usedItems, setUsedItems] = useState<UsedItem[]>([]);
+  const [usedItemOrders, setUsedItemOrders] = useState<UsedItemOrder[]>([]);
+  const [agents, setAgents] = useState<PaymentAgent[]>([]); // تم التعديل ليبدأ فارغاً ويُجلب من السحابة
 
-  const [agents, setAgents] = useState<PaymentAgent[]>(() => {
-    try { const saved = localStorage.getItem(STORAGE_KEY_AGENTS); return saved ? JSON.parse(saved) : SEED_AGENTS; } catch { return SEED_AGENTS; }
-  });
+  // --- Config State (Local Storage) ---
   const [currencyConfig, setCurrencyConfig] = useState<CurrencyRateConfig>(() => {
     try { const saved = localStorage.getItem(STORAGE_KEY_CURRENCY); return saved ? JSON.parse(saved) : DEFAULT_CURRENCY_CONFIG; } catch { return DEFAULT_CURRENCY_CONFIG; }
   });
@@ -83,12 +59,6 @@ export function useYamangoStore() {
   const [reviews, setReviews] = useState<GarageReview[]>(() => {
     try { const saved = localStorage.getItem(STORAGE_KEY_REVIEWS); return saved ? JSON.parse(saved) : SEED_GARAGE_REVIEWS; } catch { return SEED_GARAGE_REVIEWS; }
   });
-  const [usedItems, setUsedItems] = useState<UsedItem[]>(() => {
-    try { const saved = localStorage.getItem(STORAGE_KEY_USED_ITEMS); return saved ? JSON.parse(saved) : SEED_USED_ITEMS; } catch { return SEED_USED_ITEMS; }
-  });
-  const [usedItemOrders, setUsedItemOrders] = useState<UsedItemOrder[]>(() => {
-    try { const saved = localStorage.getItem(STORAGE_KEY_USED_ORDERS); return saved ? JSON.parse(saved) : SEED_USED_ORDERS; } catch { return SEED_USED_ORDERS; }
-  });
   const [language, setLanguageState] = useState<'ar' | 'en'>(() => {
     try { const saved = localStorage.getItem(STORAGE_KEY_LANGUAGE); return saved === 'en' ? 'en' : 'ar'; } catch { return 'ar'; }
   });
@@ -103,6 +73,7 @@ export function useYamangoStore() {
     if (typeof document !== 'undefined') { document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr'; document.documentElement.lang = language; }
   }, [language]);
 
+  // --- Fetch Functions ---
   const fetchProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
@@ -132,7 +103,7 @@ export function useYamangoStore() {
           inspectionStatus: item.inspection_status as 'none' | 'pending' | 'inspected', inspectionBadge: item.inspection_badge, isPromoted: item.is_promoted,
           promotionScope: item.promotion_scope, promotionActivatedAt: item.promotion_activated_at, promotionExpiresAt: item.promotion_expires_at,
           gpsTrackingEnabled: item.gps_tracking_enabled, gpsDeviceId: item.gps_device_id, gpsLastPing: item.gps_last_ping, gpsBatteryLevel: item.gps_battery_level,
-          gpsCoordinates: item.gps_coordinates, serviceNotes: item.service_notes, status: item.status as 'active' | 'in_deal' | 'sold' | 'rented' | 'paused',
+          gpsCoordinates: item.gps_coordinates, serviceNotes: item.service_notes, status: item.status as 'active' | 'in_deal' | 'sold' | 'rented' | 'paused' | 'pending_approval',
           viewsCount: item.views_count, clicksCount: item.clicks_count, inquiriesCount: item.inquiries_count, createdAt: item.created_at,
         })));
       }
@@ -175,17 +146,63 @@ export function useYamangoStore() {
 
   const fetchInspectionRequests = async () => {
     try {
-      const { data, error } = await supabase.from('inspection_requests').select('*').order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('inspection_requests').select('*, listings(title)').order('created_at', { ascending: false });
       if (error) throw error;
       if (data) {
-        setInspectionRequests(data.map((item) => ({
-          id: item.id, listingId: item.listing_id, listingTitle: '', 
+        setInspectionRequests(data.map((item: any) => ({
+          id: item.id, listingId: item.listing_id, listingTitle: item.listings?.title || `إعلان #${item.listing_id?.slice(-6)}`, 
           buyerId: item.buyer_id, buyerName: item.buyer_name, sellerId: item.seller_id, sellerName: item.seller_name,
           garageId: item.garage_id, garageName: item.garage_name, status: item.status, requestedDate: item.requested_date,
           feeAmount: item.fee_amount, currency: item.currency as 'USD' | 'SYP', report: item.report, createdAt: item.created_at,
         })));
       }
     } catch (error) { console.error("Error fetching inspections:", error); }
+  };
+
+  const fetchUsedItems = async () => {
+    try {
+      const { data, error } = await supabase.from('used_items').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data) {
+        setUsedItems(data.map(item => ({
+          id: item.id, sellerId: item.seller_id, sellerName: item.seller_name, sellerPhone: item.seller_phone, sellerRating: item.seller_rating,
+          title: item.title, category: item.category as any, condition: item.condition as any, price: item.price, currency: item.currency as any,
+          zone: item.zone as ZoneLocation, locationDetails: item.location_details, description: item.description, images: item.images || [],
+          platformCommissionRate: item.platform_commission_rate, platformCommissionAmount: item.platform_commission_amount, sellerNetPayout: item.seller_net_payout,
+          status: item.status as any, deliveryOption: item.delivery_option as any, createdAt: item.created_at, viewsCount: item.views_count
+        })));
+      }
+    } catch (error) { console.error("Error fetching used items:", error); }
+  };
+
+  const fetchUsedItemOrders = async () => {
+    try {
+      const { data, error } = await supabase.from('used_item_orders').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data) {
+        setUsedItemOrders(data.map(item => ({
+          id: item.id, itemId: item.item_id, itemTitle: item.item_title, itemCategory: item.item_category as any, itemCondition: item.item_condition as any,
+          itemPrice: item.item_price, currency: item.currency as any, commissionRate: item.commission_rate, commissionAmount: item.commission_amount, sellerNetPayout: item.seller_net_payout,
+          buyerId: item.buyer_id, buyerName: item.buyer_name, buyerPhone: item.buyer_phone, sellerId: item.seller_id, sellerName: item.seller_name, sellerPhone: item.seller_phone,
+          paymentMethod: item.payment_method as any, agentId: item.agent_id, agentName: item.agent_name, agentAddress: item.agent_address, agentPhone: item.agent_phone,
+          status: item.status as any, secretOtp: item.secret_otp, deliveryOption: item.delivery_option as any, deliveryAddress: item.delivery_address, notes: item.notes, createdAt: item.created_at
+        })));
+      }
+    } catch (error) { console.error("Error fetching used orders:", error); }
+  };
+
+  // 🔥 استرجاع الوكلاء من السحابة (هذا ما كان مفقوداً)
+  const fetchAgents = async () => {
+    try {
+      const { data, error } = await supabase.from('agents').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data) {
+        setAgents(data.map((item) => ({
+          id: item.id, name: item.name, agencyName: item.agency_name, zone: item.zone as ZoneLocation,
+          address: item.address || '', phone: item.phone || '', balanceSYP: item.balance_syp, balanceUSD: item.balance_usd, isActive: item.is_active,
+        })));
+      }
+    } catch (error) { console.error("Error fetching agents:", error); }
   };
 
   useEffect(() => {
@@ -196,9 +213,12 @@ export function useYamangoStore() {
     fetchDeals();
     fetchGarages();
     fetchInspectionRequests();
+    fetchUsedItems();
+    fetchUsedItemOrders();
+    fetchAgents(); // 🔥 استدعاء جلب الوكلاء
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) { fetchProfile(session.user.id); fetchDeals(); fetchInspectionRequests(); } 
+      if (session?.user) { fetchProfile(session.user.id); fetchDeals(); fetchInspectionRequests(); fetchUsedItemOrders(); } 
       else { setCurrentUser(null); setIsAuthenticated(false); setIsAuthLoading(false); }
     });
     return () => authListener.subscription.unsubscribe();
@@ -206,23 +226,27 @@ export function useYamangoStore() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_AGENTS, JSON.stringify(agents));
       localStorage.setItem(STORAGE_KEY_CURRENCY, JSON.stringify(currencyConfig));
       localStorage.setItem(STORAGE_KEY_APPOINTMENTS, JSON.stringify(appointments));
       localStorage.setItem(STORAGE_KEY_COMMISSION, JSON.stringify(commissionRates));
       localStorage.setItem(STORAGE_KEY_ADMINS, JSON.stringify(admins));
       localStorage.setItem(STORAGE_KEY_AUDIT_LOGS, JSON.stringify(auditLogs));
       localStorage.setItem(STORAGE_KEY_REVIEWS, JSON.stringify(reviews));
-      localStorage.setItem(STORAGE_KEY_USED_ITEMS, JSON.stringify(usedItems));
-      localStorage.setItem(STORAGE_KEY_USED_ORDERS, JSON.stringify(usedItemOrders));
     } catch (e) {}
-  }, [agents, currencyConfig, appointments, commissionRates, admins, auditLogs, reviews, usedItems, usedItemOrders]);
+  }, [currencyConfig, appointments, commissionRates, admins, auditLogs, reviews]);
 
   const logout = async () => { await supabase.auth.signOut(); };
   const switchRole = (role: UserRole) => { if (currentUser?.roles.includes(role) || currentUser?.roles.includes('admin')) setActiveRole(role); };
 
   const [filter, setFilter] = useState<ListingFilter>({ zone: 'all', category: 'all', operation: 'all', searchQuery: '', inspectedOnly: false });
-  const rankedData = rankListings(listings, filter, 5);
+  
+  // الفلترة (لا تظهر الإعلانات المعلقة أو الموقوفة إلا لصاحبها أو المدير)
+  const visibleListings = listings.filter(l => 
+    l.status === 'active' || 
+    l.userId === currentUser?.id || 
+    currentUser?.roles.includes('admin')
+  );
+  const rankedData = rankListings(visibleListings, filter, 5);
 
   const promoteListing = async (listingId: string, packageId: string) => {
     const pkg = SEED_PROMOTION_PACKAGES.find((p) => p.id === packageId);
@@ -235,6 +259,7 @@ export function useYamangoStore() {
     } catch (error) { return false; }
   };
 
+  // 🔥 عند الإضافة، نجعل الحالة "بانتظار الموافقة" (pending_approval)
   const addListing = async (newListing: Omit<Listing, 'id' | 'createdAt' | 'viewsCount' | 'clicksCount' | 'inquiriesCount'>) => {
     if (!currentUser) return null;
     try {
@@ -246,12 +271,32 @@ export function useYamangoStore() {
         has_driver_option: newListing.hasDriverOption, driver_fee_per_day: newListing.driverFeePerDay, security_deposit: newListing.securityDeposit,
         zone: newListing.zone, location_details: newListing.locationDetails, images: newListing.images, chassis_number: newListing.chassisNumber,
         ownership_verified: true, gps_tracking_enabled: newListing.gpsTrackingEnabled, gps_device_id: newListing.gpsDeviceId,
-        service_notes: newListing.serviceNotes, status: 'active',
+        service_notes: newListing.serviceNotes, 
+        status: currentUser.roles.includes('admin') ? 'active' : 'pending_approval', // 🔥 تم التعديل
       }]);
       if (error) throw error;
       await fetchListings();
       return { ...newListing, id: 'temp', createdAt: Date.now(), viewsCount: 0, clicksCount: 0, inquiriesCount: 0 } as Listing;
     } catch (error: any) { alert("حدث خطأ: " + error.message); return null; }
+  };
+
+  // 🔥 دوال إدارة الإعلانات الجديدة
+  const updateListingStatus = async (listingId: string, status: 'active' | 'paused' | 'sold' | 'pending_approval') => {
+    try {
+      const { error } = await supabase.from('listings').update({ status }).eq('id', listingId);
+      if (error) throw error;
+      await fetchListings();
+      return true;
+    } catch (error) { return false; }
+  };
+
+  const deleteListing = async (listingId: string) => {
+    try {
+      const { error } = await supabase.from('listings').delete().eq('id', listingId);
+      if (error) throw error;
+      await fetchListings();
+      return true;
+    } catch (error) { return false; }
   };
 
   const updateListingServiceNotes = async (listingId: string, serviceNotes: string) => {
@@ -267,7 +312,7 @@ export function useYamangoStore() {
 
     const contractData = {
       contractNumber: `YMG-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-      termsSummaryArabic: `عقد ${listing.operation === 'sale' ? 'بيع قطعي' : 'إيجار محدد المدة'} للمركبة ${listing.make} ${listing.model} موديل ${listing.year}. تم حفظ العربون عبر وساطة yamango.`,
+      termsSummaryArabic: `عقد ${listing.operation === 'sale' ? 'بيع قطعي' : 'إيجار محدد المدة'} للمركبة ${listing.make} ${listing.model} موديل ${listing.year}.`,
       qrVerificationHash: `SHA256:YMG-CONTRACT-${Date.now()}`,
       signedAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
       buyerSignature: `${currentUser.fullName} (توقيع إلكتروني)`,
@@ -284,6 +329,10 @@ export function useYamangoStore() {
       const { data, error } = await supabase.from('deals').insert([newDealData]).select().single();
       if (error) throw error;
       await fetchDeals();
+      // تغيير حالة الإعلان إلى "في صفقة"
+      await supabase.from('listings').update({ status: 'in_deal' }).eq('id', listing.id);
+      await fetchListings();
+      
       return {
         id: data.id, listingId: listing.id, listingTitle: listing.title, listingCategory: listing.category, listingOperation: listing.operation,
         buyerId: currentUser.id, buyerName: currentUser.fullName, sellerId: listing.userId, sellerName: listing.sellerName,
@@ -317,6 +366,10 @@ export function useYamangoStore() {
       const { error } = await supabase.from('deals').update({ status: 'completed', delivery_proof: { pickupKmOrHours: hoursOrKm, pickupDate: deliveryTime, conditionVerified: true } }).eq('id', dealId);
       if (error) throw error;
       await fetchDeals();
+      // إغلاق الإعلان
+      const deal = deals.find(d => d.id === dealId);
+      if (deal) await supabase.from('listings').update({ status: 'sold' }).eq('id', deal.listingId);
+      await fetchListings();
     } catch (error) { alert("تعذر إغلاق الصفقة."); }
   };
 
@@ -336,32 +389,92 @@ export function useYamangoStore() {
       if (error) throw error;
       await fetchInspectionRequests();
       return { ...newRequestData, id: 'temp', createdAt: Date.now() } as any;
-    } catch (error: any) { alert("حدث خطأ أثناء حجز الفحص: " + error.message); return null; }
+    } catch (error: any) { alert("حدث خطأ: " + error.message); return null; }
   };
 
   const submitInspectionReport = async (requestId: string, reportData: Omit<InspectionReport, 'id' | 'requestId' | 'isLocked' | 'tamperProofHash'>) => {
     const request = inspectionRequests.find((r) => r.id === requestId); 
     if (!request) return false;
-    
     const report: InspectionReport = { ...reportData, id: `rep_${Date.now()}`, requestId, isLocked: true, tamperProofHash: `SHA256:VERIFIED_INSPECTION_${Date.now()}` };
 
     try {
       const { error } = await supabase.from('inspection_requests').update({ status: 'completed', report: report }).eq('id', requestId);
       if (error) throw error;
       await fetchInspectionRequests();
-      
       if (request.listingId) {
         await supabase.from('listings').update({
           inspection_status: 'inspected',
-          inspection_badge: {
-            reportId: report.id, garageName: report.garageName, garageId: report.garageId,
-            inspectionDate: report.date, score: report.overallScore, verdict: report.verdict === 'poor' ? 'fair' : report.verdict
-          }
+          inspection_badge: { reportId: report.id, garageName: report.garageName, garageId: report.garageId, inspectionDate: report.date, score: report.overallScore, verdict: report.verdict === 'poor' ? 'fair' : report.verdict }
         }).eq('id', request.listingId);
         await fetchListings();
       }
       return true;
-    } catch (error) { console.error("Error submitting inspection report:", error); return false; }
+    } catch (error) { return false; }
+  };
+
+  const addUsedItem = async (itemData: Omit<UsedItem, 'id' | 'createdAt' | 'platformCommissionRate' | 'platformCommissionAmount' | 'sellerNetPayout'> & { customCommissionRate?: number }) => {
+    if (!currentUser) return null;
+    const calc = calculateUsedItemCommission(itemData.price, itemData.currency, itemData.customCommissionRate);
+
+    try {
+      const { error } = await supabase.from('used_items').insert([{
+        seller_id: currentUser.id, seller_name: currentUser.fullName, seller_phone: currentUser.phone, seller_rating: 5.0,
+        title: itemData.title, category: itemData.category, condition: itemData.condition, price: itemData.price, currency: itemData.currency,
+        zone: itemData.zone, location_details: itemData.locationDetails, description: itemData.description, images: itemData.images,
+        platform_commission_rate: calc.commissionRate, platform_commission_amount: calc.commissionAmount, seller_net_payout: calc.sellerNetPayout,
+        status: 'available', delivery_option: itemData.deliveryOption, views_count: 1
+      }]);
+      if (error) throw error;
+      await fetchUsedItems();
+      return true;
+    } catch (error: any) { alert("حدث خطأ أثناء إضافة الغرض: " + error.message); return false; }
+  };
+
+  const purchaseUsedItem = async (orderData: Omit<UsedItemOrder, 'id' | 'createdAt' | 'secretOtp' | 'status'>) => {
+    const secretOtp = generateUsedItemOtp();
+    const newOrderId = generateUsedOrderId();
+
+    try {
+      const { error } = await supabase.from('used_item_orders').insert([{
+        id: newOrderId, item_id: orderData.itemId, buyer_id: orderData.buyerId, buyer_name: orderData.buyerName, buyer_phone: orderData.buyerPhone,
+        seller_id: orderData.sellerId, seller_name: orderData.sellerName, seller_phone: orderData.sellerPhone,
+        item_title: orderData.itemTitle, item_category: orderData.itemCategory, item_condition: orderData.itemCondition, item_price: orderData.itemPrice, currency: orderData.currency,
+        commission_rate: orderData.commissionRate, commission_amount: orderData.commissionAmount, seller_net_payout: orderData.sellerNetPayout,
+        payment_method: orderData.paymentMethod, agent_id: orderData.agentId, agent_name: orderData.agentName, agent_address: orderData.agentAddress, agent_phone: orderData.agentPhone,
+        status: 'escrow_secured', secret_otp: secretOtp, delivery_option: orderData.deliveryOption, delivery_address: orderData.deliveryAddress, notes: orderData.notes
+      }]);
+
+      if (error) throw error;
+      await supabase.from('used_items').update({ status: 'reserved' }).eq('id', orderData.itemId);
+      await fetchUsedItemOrders();
+      await fetchUsedItems();
+      return { ...orderData, id: newOrderId, secretOtp, status: 'escrow_secured', createdAt: Date.now() } as UsedItemOrder;
+    } catch (error: any) {
+      alert("حدث خطأ أثناء إتمام الطلب: " + error.message);
+      return null;
+    }
+  };
+
+  const updateUsedOrderStatus = async (orderId: string, newStatus: UsedItemOrder['status']) => {
+    try {
+      const { error } = await supabase.from('used_item_orders').update({ status: newStatus }).eq('id', orderId);
+      if (error) throw error;
+      const order = usedItemOrders.find(o => o.id === orderId);
+      if (order) {
+        const itemStatus = newStatus === 'completed' ? 'sold' : newStatus === 'cancelled' ? 'available' : 'reserved';
+        await supabase.from('used_items').update({ status: itemStatus }).eq('id', order.itemId);
+        await fetchUsedItems();
+      }
+      await fetchUsedItemOrders();
+    } catch (error) { console.error("Error updating order status:", error); }
+  };
+
+  const deleteUsedItem = async (itemId: string) => {
+    try {
+      const { error } = await supabase.from('used_items').delete().eq('id', itemId);
+      if (error) throw error;
+      await fetchUsedItems();
+    } catch (error) { alert("تعذر حذف الغرض."); }
   };
 
   const updateExchangeRate = (newRate: number, autoRecalculate: boolean = true) => {
@@ -374,36 +487,14 @@ export function useYamangoStore() {
     const newAppointment: FieldInspectionAppointment = { ...data, id: `app_${Date.now()}`, createdAt: Date.now() };
     setAppointments((prev) => [newAppointment, ...prev]); return newAppointment;
   };
-  
   const updateAppointmentStatus = (id: string, status: FieldInspectionAppointment['status'], assignedInspector?: string) => {
     setAppointments((prev) => prev.map((app) => app.id === id ? { ...app, status, ...(assignedInspector ? { assignedInspector } : {}) } : app));
   };
-  
-  const updateCommissionRates = (newRates: Partial<CommissionRatesConfig>) => { 
-    setCommissionRates((prev) => ({ ...prev, ...newRates, lastUpdated: new Date().toISOString().slice(0, 10) })); 
-  };
-  
-  const addPaymentAgent = (agentData: Omit<PaymentAgent, 'id'>) => { 
-    const newAgent: PaymentAgent = { ...agentData, id: `ag_${Date.now()}` }; 
-    setAgents((prev) => [newAgent, ...prev]); 
-    return newAgent; 
-  };
-  
-  const removePaymentAgent = (agentId: string) => { 
-    setAgents((prev) => prev.filter((a) => a.id !== agentId)); 
-    return true; 
-  };
-  
-  const toggleAgentStatus = (agentId: string) => { 
-    setAgents((prev) => prev.map((a) => (a.id === agentId ? { ...a, isActive: !a.isActive } : a))); 
-  };
-  
-  const regenerateDealOtp = (dealId: string, customCode?: string) => { 
-    const freshCode = customCode ? customCode.trim().toUpperCase() : generateAgentVerificationOtp(); 
-    setDeals((prev) => prev.map((d) => (d.id === dealId ? { ...d, secretOtp: freshCode } : d))); 
-    return freshCode; 
-  };
-  
+  const updateCommissionRates = (newRates: Partial<CommissionRatesConfig>) => { setCommissionRates((prev) => ({ ...prev, ...newRates, lastUpdated: new Date().toISOString().slice(0, 10) })); };
+  const addPaymentAgent = (agentData: Omit<PaymentAgent, 'id'>) => { const newAgent: PaymentAgent = { ...agentData, id: `ag_${Date.now()}` }; setAgents((prev) => [newAgent, ...prev]); return newAgent; };
+  const removePaymentAgent = (agentId: string) => { setAgents((prev) => prev.filter((a) => a.id !== agentId)); return true; };
+  const toggleAgentStatus = (agentId: string) => { setAgents((prev) => prev.map((a) => (a.id === agentId ? { ...a, isActive: !a.isActive } : a))); };
+  const regenerateDealOtp = (dealId: string, customCode?: string) => { const freshCode = customCode ? customCode.trim().toUpperCase() : generateAgentVerificationOtp(); setDeals((prev) => prev.map((d) => (d.id === dealId ? { ...d, secretOtp: freshCode } : d))); return freshCode; };
   const toggleAdmin2fa = (adminId: string) => {
     let toggledName = ''; let newStatus = false;
     setAdmins((prev) => prev.map((adm) => { if (adm.id === adminId) { newStatus = !adm.twoFactorEnabled; toggledName = adm.fullName; return { ...adm, twoFactorEnabled: newStatus }; } return adm; }));
@@ -411,13 +502,11 @@ export function useYamangoStore() {
     setAuditLogs((prev) => [{ id: `aud_${Date.now()}`, timestamp: `${timeStr} بتوقيت دمشق`, timestampMs: Date.now(), actorId: currentUser?.id || 'sys', actorName: currentUser?.fullName || 'System', actorRole: 'المشرف العام', category: 'security_auth', categoryLabelArabic: 'أمان الحسابات', action: newStatus ? '2fa_enabled' : '2fa_disabled', actionTitleArabic: newStatus ? 'تفعيل 2FA' : 'تعطيل 2FA', details: `تم التحديث للحساب ${toggledName}`, severity: 'high', status: 'success', location: 'السويداء', ipAddress: '185.12.84.19' }, ...prev]);
     return newStatus;
   };
-  
   const addAuditLogEntry = (entry: Omit<AuditLogEntry, 'id' | 'timestamp' | 'timestampMs'>) => {
     const now = new Date(); const timeStr = `${now.toISOString().slice(0, 10)} ${now.toLocaleTimeString('ar-SY')}`;
     const newEntry: AuditLogEntry = { ...entry, id: `aud_${Date.now()}`, timestamp: `${timeStr} بتوقيت دمشق`, timestampMs: Date.now() };
     setAuditLogs((prev) => [newEntry, ...prev]); return newEntry;
   };
-  
   const addGarageReview = (reviewData: Omit<GarageReview, 'id' | 'createdAt'>) => {
     const newReview: GarageReview = { ...reviewData, id: `rev_${Date.now()}`, createdAt: Date.now() };
     const updatedReviews = [newReview, ...reviews]; setReviews(updatedReviews);
@@ -426,33 +515,9 @@ export function useYamangoStore() {
     setGarages((prev) => prev.map((g) => (g.id === reviewData.garageId ? { ...g, ratingAvg: avg, reviewsCount: targetGarageReviews.length } : g)));
     return newReview;
   };
-  
-  const addUsedItem = (itemData: Omit<UsedItem, 'id' | 'createdAt' | 'platformCommissionRate' | 'platformCommissionAmount' | 'sellerNetPayout'> & { customCommissionRate?: number }): UsedItem => {
-    const calc = calculateUsedItemCommission(itemData.price, itemData.currency, itemData.customCommissionRate);
-    const newItem: UsedItem = { ...itemData, id: `used_item_${Date.now()}`, platformCommissionRate: calc.commissionRate, platformCommissionAmount: calc.commissionAmount, sellerNetPayout: calc.sellerNetPayout, createdAt: Date.now() };
-    setUsedItems((prev) => [newItem, ...prev]); return newItem;
-  };
-  
-  const purchaseUsedItem = (orderData: Omit<UsedItemOrder, 'id' | 'createdAt' | 'secretOtp' | 'status'>): UsedItemOrder => {
-    const newOrder: UsedItemOrder = { ...orderData, id: generateUsedOrderId(), secretOtp: generateUsedItemOtp(), status: 'escrow_secured', createdAt: Date.now() };
-    setUsedItemOrders((prev) => [newOrder, ...prev]); setUsedItems((prev) => prev.map((item) => (item.id === orderData.itemId ? { ...item, status: 'reserved' } : item))); return newOrder;
-  };
-  
-  const updateUsedOrderStatus = (orderId: string, newStatus: UsedItemOrder['status']) => {
-    let targetItemId: string | undefined;
-    setUsedItemOrders((prev) => prev.map((order) => { if (order.id === orderId) { targetItemId = order.itemId; return { ...order, status: newStatus }; } return order; }));
-    if (targetItemId) {
-      if (newStatus === 'completed') setUsedItems((prev) => prev.map((item) => (item.id === targetItemId ? { ...item, status: 'sold' } : item)));
-      else if (newStatus === 'cancelled') setUsedItems((prev) => prev.map((item) => (item.id === targetItemId ? { ...item, status: 'available' } : item)));
-    }
-  };
-  
-  const deleteUsedItem = (itemId: string) => { setUsedItems((prev) => prev.filter((item) => item.id !== itemId)); };
-  
   const resetToSeedData = () => { 
-    fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); 
-    localStorage.clear(); 
-    window.location.reload(); 
+    fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); fetchUsedItems(); fetchUsedItemOrders(); fetchAgents();
+    localStorage.clear(); window.location.reload(); 
   };
 
   return {
@@ -463,5 +528,6 @@ export function useYamangoStore() {
     language, setLanguage, filter, setFilter, promoteListing, addListing, requestInspection, submitInspectionReport, createDeal, confirmEscrowByAgent,
     confirmDeliveryAndClose, updateExchangeRate, bookAppointment, updateAppointmentStatus, updateListingServiceNotes,
     usedItems, usedItemOrders, addUsedItem, purchaseUsedItem, updateUsedOrderStatus, deleteUsedItem, resetToSeedData,
+    updateListingStatus, deleteListing, // 🔥 تصدير دوال الإدارة الجديدة
   };
 }
