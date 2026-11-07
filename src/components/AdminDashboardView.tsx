@@ -1,42 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  Listing, 
-  Deal, 
-  GarageProfile, 
-  PaymentAgent, 
-  CurrencyRateConfig, 
-  FieldInspectionAppointment,
-  InspectionRequest,
-  CommissionRatesConfig,
-  AdminSecurityProfile,
-  AuditLogEntry,
-  UserRole
+  Listing, Deal, GarageProfile, PaymentAgent, CurrencyRateConfig, 
+  FieldInspectionAppointment, InspectionRequest, CommissionRatesConfig, 
+  AdminSecurityProfile, AuditLogEntry, UserRole 
 } from '../types';
 import { 
-  ShieldCheck, 
-  TrendingUp, 
-  Users, 
-  Sparkles, 
-  Wrench, 
-  Building, 
-  Sliders, 
-  Receipt,
-  FileCheck,
-  Send,
-  Coins,
-  CalendarDays,
-  Activity,
-  FileText,
-  Clock,
-  RefreshCw,
-  Zap,
-  CheckCircle2,
-  AlertTriangle,
-  QrCode,
-  Percent,
-  Lock,
-  Calendar,
-  Eye
+  ShieldCheck, TrendingUp, Users, Sparkles, Wrench, Building, 
+  Percent, Receipt, FileCheck, Send, Coins, Activity, Calendar,
+  CheckCircle2, AlertTriangle, Clock, RefreshCw
 } from 'lucide-react';
 import { WhatsAppSettingsCard } from './WhatsAppSettingsCard';
 import { NotificationMonitoringPanel } from './NotificationMonitoringPanel';
@@ -56,7 +27,7 @@ import { AgentManager } from './AgentManager';
 import { AdminSecuritySettings } from './AdminSecuritySettings';
 import { AdminInspectionRequestsTable } from './AdminInspectionRequestsTable';
 import { AdminListingsModeration } from './AdminListingsModeration';
-import { AdminUserManager } from './AdminUserManager'; // 🔥 استيراد إدارة المستخدمين
+import { AdminUserManager } from './AdminUserManager'; // ✅ إدارة المستخدمين
 import { processOfflineNotificationQueue, getStoredWhatsAppConfig } from '../services/whatsapp';
 
 interface AdminDashboardViewProps {
@@ -83,7 +54,7 @@ interface AdminDashboardViewProps {
   onUpdateListingStatus: (listingId: string, status: Listing['status']) => Promise<boolean>;
   onDeleteListing: (listingId: string) => Promise<boolean>;
   onViewListing: (listing: Listing) => void;
-  onUpdateUserRole: (userId: string, role: UserRole) => Promise<boolean>; // 🔥 خاصية إدارة المستخدمين
+  onUpdateUserRole: (userId: string, role: UserRole) => Promise<boolean>;
 }
 
 export type AdminSubTab = 'overview' | 'commissions' | 'agents' | 'contracts' | 'garages_calendar' | 'currency' | 'notifications' | 'security' | 'moderation' | 'users';
@@ -97,17 +68,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>('overview');
   const [promotedCap, setPromotedCap] = useState(5);
-
   const [isProcessingDeferred, setIsProcessingDeferred] = useState(false);
   const [deferredNotice, setDeferredNotice] = useState<{ type: 'success' | 'info' | 'error'; message: string } | null>(null);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
 
   const pendingListingsCount = listings.filter(l => l.status === 'pending_approval').length;
-
   const totalTradingVolumeUSD = deals.reduce((acc, d) => (d.currency === 'USD' ? acc + d.agreedPrice : acc), 0);
   const totalCommissionUSD = deals.reduce((acc, d) => (d.currency === 'USD' ? acc + d.platformCommissionAmount : acc), 0);
   const promotedListingsCount = listings.filter((l) => l.isPromoted).length;
-
   const completedDealsCount = useMemo(() => deals.filter((d) => d.status === 'completed').length, [deals]);
   const activeListingsCount = useMemo(() => listings.filter((l) => l.status === 'active').length, [listings]);
   const certifiedGaragesCount = useMemo(() => garages.filter((g) => g.isVerified).length, [garages]);
@@ -141,23 +109,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         <div>
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <h2 className="text-base sm:text-lg font-black text-slate-900">
-              لوحة تحكم المشرف العام (إدارة منصة yamango)
-            </h2>
+            <h2 className="text-base sm:text-lg font-black text-slate-900">لوحة تحكم المشرف العام</h2>
           </div>
-          <p className="text-slate-500 text-xs mt-0.5">
-            المنصة المركزية لإدارة وساطة الآليات، التواقيع الرقمية، إشغال الكراجات، صرف العملات، ومراجعة الإعلانات.
-          </p>
+          <p className="text-slate-500 text-xs mt-0.5">المنصة المركزية لإدارة وساطة الآليات، التواقيع الرقمية، إشغال الكراجات، صرف العملات، ومراجعة الإعلانات.</p>
         </div>
-
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={handleProcessDeferred} disabled={isProcessingDeferred} className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer">
             <Send className={`w-3.5 h-3.5 ${isProcessingDeferred ? 'animate-bounce' : ''}`} />
             <span>تفعيل الإرسال المؤجل</span>
           </button>
-          <button onClick={onOpenSqlModal} className="px-3.5 py-2 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors shrink-0 shadow-xs">
-            مخطط DDL
-          </button>
+          <button onClick={onOpenSqlModal} className="px-3.5 py-2 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors shrink-0 shadow-xs">مخطط DDL</button>
         </div>
       </div>
 
@@ -172,129 +133,68 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       )}
 
+      {/* 🔥 أزرار وصول سريع (لضمان عدم ضياع التبويبات) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <button onClick={() => setActiveSubTab('users')} className="bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-2xl shadow-md transition-all flex items-center justify-between group">
+          <div className="text-right">
+            <span className="text-sm font-black block">إدارة المستخدمين والصلاحيات</span>
+            <span className="text-xs text-indigo-200 mt-1 block">عرض جميع الحسابات وتعديل أدوارهم (مشتري، بائع، وكيل...)</span>
+          </div>
+          <Users className="w-8 h-8 text-indigo-300 group-hover:scale-110 transition-transform" />
+        </button>
+
+        <button onClick={() => setActiveSubTab('moderation')} className="bg-amber-500 hover:bg-amber-600 text-slate-900 p-4 rounded-2xl shadow-md transition-all flex items-center justify-between group">
+          <div className="text-right">
+            <span className="text-sm font-black block">مراجعة الإعلانات الجديدة</span>
+            <span className="text-xs text-amber-900 mt-1 block">لديك {pendingListingsCount} إعلان بانتظار الموافقة والنشر</span>
+          </div>
+          <AlertTriangle className="w-8 h-8 text-amber-800 group-hover:scale-110 transition-transform" />
+        </button>
+      </div>
+
       {/* Top Live Statistics Widgets */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         <div onClick={() => setActiveSubTab('contracts')} className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs hover:shadow-md transition-all cursor-pointer group relative overflow-hidden text-right">
           <div className="absolute top-0 right-0 w-1.5 h-full bg-emerald-500 rounded-r-2xl" />
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-slate-600">إجمالي الصفقات المكتملة</span>
-            <span className="p-2 bg-emerald-50 text-emerald-600 rounded-xl group-hover:scale-105 transition-transform"><CheckCircle2 className="w-4 h-4" /></span>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900 tabular-nums">{completedDealsCount}</span>
-            <span className="text-xs font-semibold text-slate-500">صفقة مبرمة</span>
-          </div>
+          <div className="flex items-center justify-between mb-2"><span className="text-xs font-bold text-slate-600">إجمالي الصفقات المكتملة</span><span className="p-2 bg-emerald-50 text-emerald-600 rounded-xl group-hover:scale-105 transition-transform"><CheckCircle2 className="w-4 h-4" /></span></div>
+          <div className="flex items-baseline gap-2"><span className="text-2xl font-black text-slate-900 tabular-nums">{completedDealsCount}</span><span className="text-xs font-semibold text-slate-500">صفقة مبرمة</span></div>
         </div>
-
         <div onClick={() => setActiveSubTab('overview')} className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs hover:shadow-md transition-all cursor-pointer group relative overflow-hidden text-right">
           <div className="absolute top-0 right-0 w-1.5 h-full bg-blue-500 rounded-r-2xl" />
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-slate-600">الإعلانات النشطة المعروضة</span>
-            <span className="p-2 bg-blue-50 text-blue-600 rounded-xl group-hover:scale-105 transition-transform"><Sparkles className="w-4 h-4" /></span>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900 tabular-nums">{activeListingsCount}</span>
-            <span className="text-xs font-semibold text-slate-500">إعلان متاح</span>
-          </div>
+          <div className="flex items-center justify-between mb-2"><span className="text-xs font-bold text-slate-600">الإعلانات النشطة المعروضة</span><span className="p-2 bg-blue-50 text-blue-600 rounded-xl group-hover:scale-105 transition-transform"><Sparkles className="w-4 h-4" /></span></div>
+          <div className="flex items-baseline gap-2"><span className="text-2xl font-black text-slate-900 tabular-nums">{activeListingsCount}</span><span className="text-xs font-semibold text-slate-500">إعلان متاح</span></div>
         </div>
-
         <div onClick={() => setActiveSubTab('moderation')} className="bg-white rounded-2xl border border-amber-200/90 p-4 shadow-xs hover:shadow-md transition-all cursor-pointer group relative overflow-hidden text-right">
           <div className="absolute top-0 right-0 w-1.5 h-full bg-amber-500 rounded-r-2xl" />
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-amber-800">إعلانات بانتظار المراجعة</span>
-            <span className="p-2 bg-amber-50 text-amber-600 rounded-xl group-hover:scale-105 transition-transform"><AlertTriangle className="w-4 h-4" /></span>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-amber-600 tabular-nums">{pendingListingsCount}</span>
-            <span className="text-xs font-semibold text-amber-700">تحتاج موافقة</span>
-          </div>
+          <div className="flex items-center justify-between mb-2"><span className="text-xs font-bold text-amber-800">إعلانات بانتظار المراجعة</span><span className="p-2 bg-amber-50 text-amber-600 rounded-xl group-hover:scale-105 transition-transform"><AlertTriangle className="w-4 h-4" /></span></div>
+          <div className="flex items-baseline gap-2"><span className="text-2xl font-black text-amber-600 tabular-nums">{pendingListingsCount}</span><span className="text-xs font-semibold text-amber-700">تحتاج موافقة</span></div>
         </div>
-
         <div onClick={() => setActiveSubTab('garages_calendar')} className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs hover:shadow-md transition-all cursor-pointer group relative overflow-hidden text-right">
           <div className="absolute top-0 right-0 w-1.5 h-full bg-orange-500 rounded-r-2xl" />
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-slate-600">الكراجات الفنية المعتمدة</span>
-            <span className="p-2 bg-orange-50 text-orange-600 rounded-xl group-hover:scale-105 transition-transform"><Wrench className="w-4 h-4" /></span>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900 tabular-nums">{certifiedGaragesCount}</span>
-            <span className="text-xs font-semibold text-slate-500">كراج معتمد</span>
-          </div>
+          <div className="flex items-center justify-between mb-2"><span className="text-xs font-bold text-slate-600">الكراجات الفنية المعتمدة</span><span className="p-2 bg-orange-50 text-orange-600 rounded-xl group-hover:scale-105 transition-transform"><Wrench className="w-4 h-4" /></span></div>
+          <div className="flex items-baseline gap-2"><span className="text-2xl font-black text-slate-900 tabular-nums">{certifiedGaragesCount}</span><span className="text-xs font-semibold text-slate-500">كراج معتمد</span></div>
         </div>
       </div>
 
-      {/* Navigation Sub-Tabs */}
+      {/* Navigation Sub-Tabs (الشريط الأفقي) */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 bg-white p-2 rounded-2xl border border-slate-200 shadow-xs">
-        <button onClick={() => setActiveSubTab('overview')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'overview' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          <TrendingUp className="w-3.5 h-3.5 text-orange-400" /><span>نظرة عامة</span>
-        </button>
-
-        {/* 🔥 تبويب إدارة المستخدمين الجديد */}
-        <button onClick={() => setActiveSubTab('users')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'users' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          <Users className="w-3.5 h-3.5 text-indigo-400" />
-          <span>إدارة المستخدمين</span>
-        </button>
-
-        <button onClick={() => setActiveSubTab('moderation')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'moderation' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          <AlertTriangle className="w-3.5 h-3.5" />
-          <span>مراجعة الإعلانات</span>
-          {pendingListingsCount > 0 && <span className="bg-rose-500 text-white text-[10px] px-1.5 rounded-full ml-1">{pendingListingsCount}</span>}
-        </button>
-
-        <button onClick={() => setActiveSubTab('commissions')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'commissions' ? 'bg-orange-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          <Percent className="w-3.5 h-3.5" /><span>العمولات والأرباح</span>
-        </button>
-        <button onClick={() => setActiveSubTab('agents')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'agents' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          <Building className="w-3.5 h-3.5 text-emerald-400" /><span>وكلاء الدفع ({agents.length})</span>
-        </button>
-        <button onClick={() => setActiveSubTab('contracts')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'contracts' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          <FileCheck className="w-3.5 h-3.5 text-emerald-400" /><span>العقود ({deals.length})</span>
-        </button>
-        <button onClick={() => setActiveSubTab('garages_calendar')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'garages_calendar' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          <Activity className="w-3.5 h-3.5 text-blue-400" /><span>إشغال الكراجات</span>
-        </button>
-        <button onClick={() => setActiveSubTab('currency')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'currency' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          <Coins className="w-3.5 h-3.5 text-orange-400" /><span>أسعار الصرف</span>
-        </button>
-        <button onClick={() => setActiveSubTab('notifications')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'notifications' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          <Send className="w-3.5 h-3.5" /><span>طابور الواتساب</span>
-        </button>
-        <button onClick={() => setActiveSubTab('security')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'security' ? 'bg-rose-700 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          <ShieldCheck className="w-3.5 h-3.5 text-rose-300" /><span>الأمان وسجل التدقيق ({auditLogs.length})</span>
-        </button>
+        <button onClick={() => setActiveSubTab('overview')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'overview' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><TrendingUp className="w-3.5 h-3.5 text-orange-400" /><span>نظرة عامة</span></button>
+        <button onClick={() => setActiveSubTab('users')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'users' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><Users className="w-3.5 h-3.5 text-indigo-400" /><span>إدارة المستخدمين</span></button>
+        <button onClick={() => setActiveSubTab('moderation')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'moderation' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><AlertTriangle className="w-3.5 h-3.5" /><span>مراجعة الإعلانات</span>{pendingListingsCount > 0 && <span className="bg-rose-500 text-white text-[10px] px-1.5 rounded-full ml-1">{pendingListingsCount}</span>}</button>
+        <button onClick={() => setActiveSubTab('commissions')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'commissions' ? 'bg-orange-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><Percent className="w-3.5 h-3.5" /><span>العمولات والأرباح</span></button>
+        <button onClick={() => setActiveSubTab('agents')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'agents' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><Building className="w-3.5 h-3.5 text-emerald-400" /><span>وكلاء الدفع ({agents.length})</span></button>
+        <button onClick={() => setActiveSubTab('contracts')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'contracts' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><FileCheck className="w-3.5 h-3.5 text-emerald-400" /><span>العقود ({deals.length})</span></button>
+        <button onClick={() => setActiveSubTab('garages_calendar')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'garages_calendar' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><Activity className="w-3.5 h-3.5 text-blue-400" /><span>إشغال الكراجات</span></button>
+        <button onClick={() => setActiveSubTab('currency')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'currency' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><Coins className="w-3.5 h-3.5 text-orange-400" /><span>أسعار الصرف</span></button>
+        <button onClick={() => setActiveSubTab('notifications')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'notifications' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><Send className="w-3.5 h-3.5" /><span>طابور الواتساب</span></button>
       </div>
 
-      {/* SUB-TAB: USER MANAGER */}
-      {activeSubTab === 'users' && (
-        <AdminUserManager onUpdateRole={onUpdateUserRole} />
-      )}
+      {/* CONTENT TABS */}
+      {activeSubTab === 'users' && <AdminUserManager onUpdateRole={onUpdateUserRole} />}
+      {activeSubTab === 'moderation' && <AdminListingsModeration listings={listings} onUpdateStatus={onUpdateListingStatus} onDeleteListing={onDeleteListing} onViewListing={onViewListing} />}
 
-      {/* SUB-TAB: MODERATION */}
-      {activeSubTab === 'moderation' && (
-        <AdminListingsModeration listings={listings} onUpdateStatus={onUpdateListingStatus} onDeleteListing={onDeleteListing} onViewListing={onViewListing} />
-      )}
-
-      {/* SUB-TAB 1: OVERVIEW */}
       {activeSubTab === 'overview' && (
         <div className="space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-              <div className="flex items-center justify-between text-slate-400 mb-2"><span className="font-semibold">حجم التداول بالدولار</span><TrendingUp className="w-4 h-4 text-emerald-600" /></div>
-              <div className="text-xl font-black text-slate-900 tabular-nums">${totalTradingVolumeUSD.toLocaleString()}</div>
-            </div>
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-              <div className="flex items-center justify-between text-slate-400 mb-2"><span className="font-semibold">إجمالي العمولات</span><Receipt className="w-4 h-4 text-orange-600" /></div>
-              <div className="text-xl font-black text-orange-700 tabular-nums">${totalCommissionUSD.toLocaleString()}</div>
-            </div>
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-              <div className="flex items-center justify-between text-slate-400 mb-2"><span className="font-semibold">الكراجات المعتمدة</span><Wrench className="w-4 h-4 text-blue-600" /></div>
-              <div className="text-xl font-black text-slate-900 tabular-nums">{garages.length} كراجات</div>
-            </div>
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-              <div className="flex items-center justify-between text-slate-400 mb-2"><span className="font-semibold">الإعلانات المروجة</span><Sparkles className="w-4 h-4 text-orange-500" /></div>
-              <div className="text-xl font-black text-slate-900 tabular-nums">{promotedListingsCount} إعلانات</div>
-            </div>
-          </div>
           <PlatformEfficiencyPanel deals={deals} />
           <DealGrowthLineChart deals={deals} />
           <DealStatusPieChart deals={deals} />
@@ -335,7 +235,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           <WhatsAppSettingsCard promotedListings={listings.filter((l) => l.isPromoted)} />
         </div>
       )}
-
+      
       {activeSubTab === 'security' && <AdminSecuritySettings admins={admins} auditLogs={auditLogs} onToggle2fa={onToggle2fa} />}
     </div>
   );
