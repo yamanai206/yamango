@@ -34,18 +34,7 @@ import {
 } from './services/pushNotificationService';
 import { Listing, Deal, GarageProfile, InspectionReport } from './types';
 import { 
-  MapPin, 
-  ShieldCheck, 
-  Wrench, 
-  Plus, 
-  WifiOff, 
-  Wifi, 
-  Car,
-  X,
-  Map,
-  LayoutGrid,
-  Layers,
-  Compass,
+  MapPin, ShieldCheck, Wrench, Plus, WifiOff, Wifi, Car, X, Map, LayoutGrid, Layers, Compass,
 } from 'lucide-react';
 
 export default function App() {
@@ -206,6 +195,7 @@ export default function App() {
       </div>
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* ... محتوى التطبيق العادي ... */}
         {activeTab === 'listings' && (
           <div>
             <div className="bg-gradient-to-r from-orange-600 via-orange-700 to-slate-900 rounded-3xl p-6 sm:p-8 text-white mb-6 shadow-xs relative overflow-hidden">
@@ -275,33 +265,13 @@ export default function App() {
         {activeTab === 'deals' && (<DealsListView deals={store.deals} onSelectDeal={(d) => setActiveDeal(d)} />)}
         {activeTab === 'agents' && (<AgentsListView agents={store.agents} />)}
 
+        {/* 🔥 الحماية المطلقة للوحة الإدارة */}
         {activeTab === 'admin' && store.currentUser.roles.includes('admin') && (
           <AdminDashboardView
-            listings={store.rawListings} 
-            deals={store.deals} 
-            garages={store.garages} 
-            agents={store.agents} 
-            onOpenSqlModal={() => setIsSqlModalOpen(true)} 
-            currencyConfig={store.currencyConfig} 
-            onUpdateExchangeRate={store.updateExchangeRate} 
-            appointments={store.appointments} 
-            onBookAppointment={store.bookAppointment} 
-            onUpdateAppointmentStatus={store.updateAppointmentStatus} 
-            inspectionRequests={store.inspectionRequests} 
-            commissionRates={store.commissionRates} 
-            onUpdateCommissionRates={store.updateCommissionRates} 
-            onAddAgent={store.addPaymentAgent} 
-            onRemoveAgent={store.removePaymentAgent} 
-            onToggleAgentStatus={store.toggleAgentStatus} 
-            onRegenerateOtp={store.regenerateDealOtp} 
-            admins={store.admins} 
-            auditLogs={store.auditLogs} 
-            onToggle2fa={store.toggleAdmin2fa}
-            onUpdateListingStatus={store.updateListingStatus}
-            onDeleteListing={store.deleteListing}
-            onViewListing={(listing) => setSelectedListing(listing)}
+            listings={store.rawListings} deals={store.deals} garages={store.garages} agents={store.agents} onOpenSqlModal={() => setIsSqlModalOpen(true)} currencyConfig={store.currencyConfig} onUpdateExchangeRate={store.updateExchangeRate} appointments={store.appointments} onBookAppointment={store.bookAppointment} onUpdateAppointmentStatus={store.updateAppointmentStatus} inspectionRequests={store.inspectionRequests} commissionRates={store.commissionRates} onUpdateCommissionRates={store.updateCommissionRates} onAddAgent={store.addPaymentAgent} onRemoveAgent={store.removePaymentAgent} onToggleAgentStatus={store.toggleAgentStatus} onRegenerateOtp={store.regenerateDealOtp} admins={store.admins} auditLogs={store.auditLogs} onToggle2fa={store.toggleAdmin2fa}
+            onUpdateListingStatus={store.updateListingStatus} onDeleteListing={store.deleteListing} onViewListing={(listing) => setSelectedListing(listing)}
             onUpdateUserRole={store.updateUserRole}
-            onRefreshGarages={store.fetchGarages} /* 🔥 تمرير الدالة الجديدة هنا */
+            onRefreshGarages={store.fetchGarages}
           />
         )}
       </main>

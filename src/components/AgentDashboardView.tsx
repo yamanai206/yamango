@@ -42,10 +42,12 @@ export const AgentDashboardView: React.FC<AgentDashboardViewProps> = ({
     );
   }
 
-  // الصفقات التي بانتظار تأكيد الوكيل (حالتها escrow_pending)
+  // 🔥 الفلترة الصارمة: الوكيل يرى فقط الصفقات التي هو مسؤول عنها أو المعلقة
+  const mySecuredDeals = deals.filter(d => 
+    d.status === 'escrow_secured' && d.escrowAgentName === myAgentProfile.agencyName
+  );
+  
   const pendingDeals = deals.filter(d => d.status === 'escrow_pending');
-  // الصفقات التي تم تأكيدها بواسطة هذا الوكيل
-  const securedDeals = deals.filter(d => d.status === 'escrow_secured' && d.escrowAgentName === myAgentProfile.agencyName);
 
   const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +74,7 @@ export const AgentDashboardView: React.FC<AgentDashboardViewProps> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Header */}
+      {/* Header - يعرض بيانات الوكيل فقط */}
       <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-3xl p-6 sm:p-8 text-white shadow-lg">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-2xl border border-emerald-500/30">
@@ -127,23 +129,24 @@ export const AgentDashboardView: React.FC<AgentDashboardViewProps> = ({
           )}
         </div>
 
-        {/* Completed Deals */}
+        {/* My Secured Deals (خاصة بالوكيل فقط) */}
         <div className="space-y-4">
           <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-            أمانات تم استلامها ({securedDeals.length})
+            أمانات قمت باستلامها ({mySecuredDeals.length})
           </h2>
           
-          {securedDeals.length === 0 ? (
+          {mySecuredDeals.length === 0 ? (
             <div className="bg-slate-50 rounded-2xl p-8 text-center text-slate-500 border border-slate-200 border-dashed">
               لم تقم باستلام أي أمانات بعد.
             </div>
           ) : (
-            securedDeals.map(deal => (
+            mySecuredDeals.map(deal => (
               <div key={deal.id} className="bg-white rounded-2xl p-5 border border-emerald-200 bg-emerald-50/30 shadow-xs flex items-center justify-between">
                 <div>
                   <h3 className="font-bold text-slate-900 text-sm">{deal.listingTitle}</h3>
                   <p className="text-[10px] text-slate-500 mt-1">إيصال: {deal.receiptNumber}</p>
+                  <p className="text-[10px] text-slate-500 mt-1">المشتري: {deal.buyerName}</p>
                 </div>
                 <div className="text-left">
                   <span className="font-bold text-emerald-700 text-sm">{deal.depositAmount.toLocaleString()} {deal.currency}</span>

@@ -45,6 +45,7 @@ interface NavItemConfig {
   subtitle: string;
   icon: React.ComponentType<{ className?: string }>;
   tag?: string;
+  adminOnly?: boolean; // خاصية جديدة للتحكم بالصلاحيات
 }
 
 const NAV_ITEMS: NavItemConfig[] = [
@@ -53,15 +54,7 @@ const NAV_ITEMS: NavItemConfig[] = [
   { id: 'garages', title: 'الكراجات المعتمدة والفحص الفني', subtitle: 'حجز مواعيد المعاينة الميدانية وتقارير السلامة ومطابقة المواصفات', icon: Wrench, tag: 'فحص معتمد' },
   { id: 'deals', title: 'الصفقات والوساطة المالية (الإسكرو)', subtitle: 'متابعة العقود الرقمية، حجز العربون، ورموز التحقق السرية OTP', icon: ShieldCheck, tag: 'حماية إسكرو' },
   { id: 'agents', title: 'وكلاء الدفع المعتمدون', subtitle: 'نقاط تسليم واستلام الكاش المعتمدة في الكفر والسويداء وصلخد', icon: Building, tag: 'نقاط الكاش' },
-  { id: 'admin', title: 'لوحة تحكم المشرف العام', subtitle: 'مراقبة الصفقات، نمو المبيعات، المخططات البيانية، وضبط العملات', icon: LayoutDashboard, tag: 'الإدارة العليا' },
-];
-
-const ROLES_CONFIG: { role: UserRole; title: string; desc: string; badge: string; }[] = [
-  { role: 'buyer', title: 'مشتري / مستأجر', desc: 'تصفح الآليات، تقديم العروض، إيداع العربون، وحجز الفحص', badge: 'طلب وشراء' },
-  { role: 'seller', title: 'بائع / مؤجّر', desc: 'إضافة الإعلانات، إدارة الأسعار وتتبع العروض وتوقيع العقود', badge: 'عرض وبيع' },
-  { role: 'garage', title: 'كراج فني معتمد', desc: 'إصدار تقارير الفحص الفني وتوثيق حالة المحرك والشاسيه', badge: 'فحص ميكانيكي' },
-  { role: 'agent', title: 'وكيل دفع (إسكرو)', desc: 'تأكيد استلام العربون بالكاش وفتح رموز التحقق OTP وإصدار الإيصالات', badge: 'وساطة كاش' },
-  { role: 'admin', title: 'مشرف المنصة العام', desc: 'إدارة شاملة لكافة الصفقات، إشغال الكراجات، العمولات وأسعار الصرف', badge: 'إشراف كامل' },
+  { id: 'admin', title: 'لوحة تحكم المشرف العام', subtitle: 'مراقبة الصفقات، نمو المبيعات، المخططات البيانية، وضبط العملات', icon: LayoutDashboard, tag: 'الإدارة العليا', adminOnly: true },
 ];
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -80,6 +73,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onToggleLanguage,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const isAdmin = currentUser.roles.includes('admin');
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -95,10 +89,9 @@ export const TopBar: React.FC<TopBarProps> = ({
     return () => { document.body.style.overflow = ''; };
   }, [isMenuOpen]);
 
-  // --- Role-Based Access Control (RBAC) ---
-  const isAdmin = currentUser.roles.includes('admin');
-  
+  // فلترة أقسام التنقل: لا يرى المدير فقط إلا ما يخصه
   const allowedNavItems = NAV_ITEMS.filter(item => {
+    if (item.adminOnly && !isAdmin) return false;
     if (isAdmin) return true;
     if (currentUser.roles.includes('buyer') && ['listings', 'used_goods', 'garages', 'deals'].includes(item.id)) return true;
     if ((currentUser.roles.includes('seller') || currentUser.roles.includes('lessor')) && ['listings', 'used_goods', 'deals'].includes(item.id)) return true;
@@ -118,7 +111,6 @@ export const TopBar: React.FC<TopBarProps> = ({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 gap-4">
             
-            {/* Top Corner: Menu Launcher & Brand */}
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setIsMenuOpen(true)}
@@ -143,7 +135,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               </button>
             </div>
 
-            {/* Center: Desktop Navigation Hub (Filtered by RBAC) */}
+            {/* Center Navigation Hub */}
             <div className="hidden md:flex items-center gap-1 bg-slate-800/80 p-1 rounded-2xl border border-slate-700/60">
               {allowedNavItems.slice(0, 5).map((item) => (
                 <button
@@ -158,7 +150,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               ))}
             </div>
 
-            {/* Left Corner: Quick Actions */}
+            {/* Left Quick Actions */}
             <div className="flex items-center gap-2">
               <button onClick={onOpenNewListing} className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-950 bg-orange-500 hover:bg-orange-400 rounded-xl transition-all shadow-sm shadow-orange-500/20 whitespace-nowrap cursor-pointer">
                 <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -180,9 +172,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
               <button
                 type="button"
-                onClick={() => {
-                  if (window.confirm('هل أنت متأكد من تسجيل الخروج من الحساب؟')) onLogout();
-                }}
+                onClick={() => { if (window.confirm('هل أنت متأكد من تسجيل الخروج من الحساب؟')) onLogout(); }}
                 className="flex items-center justify-center p-2 text-rose-400 hover:text-white bg-slate-800 hover:bg-rose-600 border border-slate-700 hover:border-rose-500 rounded-xl transition-colors cursor-pointer"
                 title="تسجيل الخروج"
               >
@@ -193,7 +183,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         </div>
       </header>
 
-      {/* Slide-out Menu / Options Hub Drawer */}
+      {/* Drawer Menu */}
       {isMenuOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden">
           <div onClick={() => setIsMenuOpen(false)} className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity animate-in fade-in duration-200" />
@@ -268,10 +258,21 @@ export const TopBar: React.FC<TopBarProps> = ({
                         <div><span className="font-bold text-slate-900 block">مركز المساعدة</span><span className="text-[10px] text-slate-500 block">دليل الاستخدام</span></div>
                       </button>
                     )}
-                    <button onClick={() => { onOpenSqlModal(); setIsMenuOpen(false); }} className="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-right transition-colors cursor-pointer flex flex-col justify-between">
-                      <Database className="w-4 h-4 text-blue-600 mb-1" />
-                      <div><span className="font-bold text-slate-900 block">مخطط SQL DDL</span><span className="text-[10px] text-slate-500 block">الجداول</span></div>
-                    </button>
+                    
+                    {/* 🔥 إخفاء SQL DDL عن غير المدير */}
+                    {isAdmin && (
+                      <button onClick={() => { onOpenSqlModal(); setIsMenuOpen(false); }} className="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-right transition-colors cursor-pointer flex flex-col justify-between">
+                        <Database className="w-4 h-4 text-blue-600 mb-1" />
+                        <div><span className="font-bold text-slate-900 block">مخطط SQL DDL</span><span className="text-[10px] text-slate-500 block">الجداول</span></div>
+                      </button>
+                    )}
+
+                    {isAdmin && (
+                      <button onClick={() => { if (window.confirm('هل تود إعادة تعيين كافة البيانات؟')) { onResetData(); setIsMenuOpen(false); } }} className="p-3 bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-xl text-right transition-colors cursor-pointer flex flex-col justify-between">
+                        <RefreshCw className="w-4 h-4 text-rose-600 mb-1" />
+                        <div><span className="font-bold text-rose-900 block">إعادة التهيئة</span><span className="text-[10px] text-rose-600 block">للمدير فقط</span></div>
+                      </button>
+                    )}
                   </div>
                 </div>
 
