@@ -14,7 +14,6 @@ import { calculateEscrowCommission, generateAgentVerificationOtp } from '../util
 import { calculateUsedItemCommission, generateUsedItemOtp, generateUsedOrderId } from '../utils/usedGoods';
 import { supabase } from '../lib/supabase';
 
-// مفاتيح التخزين المحلي للبيانات الثانوية
 const STORAGE_KEY_CURRENCY = 'yamango_currency_v1';
 const STORAGE_KEY_APPOINTMENTS = 'yamango_appointments_v1';
 const STORAGE_KEY_COMMISSION = 'yamango_commission_rates_v1';
@@ -38,9 +37,9 @@ export function useYamangoStore() {
   const [inspectionRequests, setInspectionRequests] = useState<InspectionRequest[]>([]);
   const [usedItems, setUsedItems] = useState<UsedItem[]>([]);
   const [usedItemOrders, setUsedItemOrders] = useState<UsedItemOrder[]>([]);
-  const [agents, setAgents] = useState<PaymentAgent[]>([]); // تم التعديل ليبدأ فارغاً ويُجلب من السحابة
+  const [agents, setAgents] = useState<PaymentAgent[]>([]);
 
-  // --- Config State (Local Storage) ---
+  // --- Config State ---
   const [currencyConfig, setCurrencyConfig] = useState<CurrencyRateConfig>(() => {
     try { const saved = localStorage.getItem(STORAGE_KEY_CURRENCY); return saved ? JSON.parse(saved) : DEFAULT_CURRENCY_CONFIG; } catch { return DEFAULT_CURRENCY_CONFIG; }
   });
@@ -191,7 +190,6 @@ export function useYamangoStore() {
     } catch (error) { console.error("Error fetching used orders:", error); }
   };
 
-  // 🔥 استرجاع الوكلاء من السحابة (هذا ما كان مفقوداً)
   const fetchAgents = async () => {
     try {
       const { data, error } = await supabase.from('agents').select('*').order('created_at', { ascending: false });
@@ -205,17 +203,35 @@ export function useYamangoStore() {
     } catch (error) { console.error("Error fetching agents:", error); }
   };
 
+  // --- Fetch All Users (Admin Only) ---
+  const fetchAllUsers = async () => {
+    try {
+      const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      return [];
+    }
+  };
+
+  // --- Update User Role ---
+  const updateUserRole = async (userId: string, newRole: UserRole) => {
+    try {
+      const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error("Error updating role:", error);
+      return false;
+    }
+  };
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) fetchProfile(session.user.id); else setIsAuthLoading(false);
     });
-    fetchListings();
-    fetchDeals();
-    fetchGarages();
-    fetchInspectionRequests();
-    fetchUsedItems();
-    fetchUsedItemOrders();
-    fetchAgents(); // 🔥 استدعاء جلب الوكلاء
+    fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); fetchUsedItems(); fetchUsedItemOrders(); fetchAgents();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) { fetchProfile(session.user.id); fetchDeals(); fetchInspectionRequests(); fetchUsedItemOrders(); } 
@@ -239,13 +255,7 @@ export function useYamangoStore() {
   const switchRole = (role: UserRole) => { if (currentUser?.roles.includes(role) || currentUser?.roles.includes('admin')) setActiveRole(role); };
 
   const [filter, setFilter] = useState<ListingFilter>({ zone: 'all', category: 'all', operation: 'all', searchQuery: '', inspectedOnly: false });
-  
-  // الفلترة (لا تظهر الإعلانات المعلقة أو الموقوفة إلا لصاحبها أو المدير)
-  const visibleListings = listings.filter(l => 
-    l.status === 'active' || 
-    l.userId === currentUser?.id || 
-    currentUser?.roles.includes('admin')
-  );
+  const visibleListings = listings.filter(l => l.status === 'active' || l.userId === currentUser?.id || currentUser?.roles.includes('admin'));
   const rankedData = rankListings(visibleListings, filter, 5);
 
   const promoteListing = async (listingId: string, packageId: string) => {
@@ -259,7 +269,6 @@ export function useYamangoStore() {
     } catch (error) { return false; }
   };
 
-  // 🔥 عند الإضافة، نجعل الحالة "بانتظار الموافقة" (pending_approval)
   const addListing = async (newListing: Omit<Listing, 'id' | 'createdAt' | 'viewsCount' | 'clicksCount' | 'inquiriesCount'>) => {
     if (!currentUser) return null;
     try {
@@ -272,7 +281,7 @@ export function useYamangoStore() {
         zone: newListing.zone, location_details: newListing.locationDetails, images: newListing.images, chassis_number: newListing.chassisNumber,
         ownership_verified: true, gps_tracking_enabled: newListing.gpsTrackingEnabled, gps_device_id: newListing.gpsDeviceId,
         service_notes: newListing.serviceNotes, 
-        status: currentUser.roles.includes('admin') ? 'active' : 'pending_approval', // 🔥 تم التعديل
+        status: currentUser.roles.includes('admin') ? 'active' : 'pending_approval',
       }]);
       if (error) throw error;
       await fetchListings();
@@ -280,7 +289,6 @@ export function useYamangoStore() {
     } catch (error: any) { alert("حدث خطأ: " + error.message); return null; }
   };
 
-  // 🔥 دوال إدارة الإعلانات الجديدة
   const updateListingStatus = async (listingId: string, status: 'active' | 'paused' | 'sold' | 'pending_approval') => {
     try {
       const { error } = await supabase.from('listings').update({ status }).eq('id', listingId);
@@ -329,7 +337,6 @@ export function useYamangoStore() {
       const { data, error } = await supabase.from('deals').insert([newDealData]).select().single();
       if (error) throw error;
       await fetchDeals();
-      // تغيير حالة الإعلان إلى "في صفقة"
       await supabase.from('listings').update({ status: 'in_deal' }).eq('id', listing.id);
       await fetchListings();
       
@@ -366,7 +373,6 @@ export function useYamangoStore() {
       const { error } = await supabase.from('deals').update({ status: 'completed', delivery_proof: { pickupKmOrHours: hoursOrKm, pickupDate: deliveryTime, conditionVerified: true } }).eq('id', dealId);
       if (error) throw error;
       await fetchDeals();
-      // إغلاق الإعلان
       const deal = deals.find(d => d.id === dealId);
       if (deal) await supabase.from('listings').update({ status: 'sold' }).eq('id', deal.listingId);
       await fetchListings();
@@ -528,6 +534,6 @@ export function useYamangoStore() {
     language, setLanguage, filter, setFilter, promoteListing, addListing, requestInspection, submitInspectionReport, createDeal, confirmEscrowByAgent,
     confirmDeliveryAndClose, updateExchangeRate, bookAppointment, updateAppointmentStatus, updateListingServiceNotes,
     usedItems, usedItemOrders, addUsedItem, purchaseUsedItem, updateUsedOrderStatus, deleteUsedItem, resetToSeedData,
-    updateListingStatus, deleteListing, // 🔥 تصدير دوال الإدارة الجديدة
+    updateListingStatus, deleteListing, fetchAllUsers, updateUserRole // <-- تصدير الدوال الجديدة
   };
 }
