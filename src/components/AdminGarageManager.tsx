@@ -3,7 +3,8 @@ import { GarageProfile, User, ZoneLocation } from '../types';
 import { supabase } from '../lib/supabase';
 import { 
   Wrench, Plus, Search, MapPin, 
-  CheckCircle2, XCircle, Loader2, Link as LinkIcon, User as UserIcon 
+  CheckCircle2, XCircle, Loader2, Link as LinkIcon, User as UserIcon,
+  Trash2 
 } from 'lucide-react';
 
 interface AdminGarageManagerProps {
@@ -27,7 +28,6 @@ export const AdminGarageManager: React.FC<AdminGarageManagerProps> = ({ garages,
   const [selectedUserId, setSelectedUserId] = useState('');
 
   useEffect(() => {
-    // جلب المستخدمين لربطهم بالكراجات
     const fetchUsers = async () => {
       const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
       if (data) setUsers(data as any);
@@ -80,6 +80,19 @@ export const AdminGarageManager: React.FC<AdminGarageManagerProps> = ({ garages,
     }
   };
 
+  // 🔥 دالة حذف الكراج
+  const handleDeleteGarage = async (garageId: string) => {
+    if (!window.confirm('هل أنت متأكد من حذف هذا الكراج نهائياً؟ سيتم حذف جميع طلبات الفحص والتقييمات المرتبطة به.')) return;
+    
+    try {
+      const { error } = await supabase.from('garages').delete().eq('id', garageId);
+      if (error) throw error;
+      onRefresh();
+    } catch (error: any) {
+      alert("تعذر حذف الكراج: " + error.message);
+    }
+  };
+
   const filteredGarages = garages.filter(g => 
     g.businessName.includes(searchQuery) || g.address.includes(searchQuery)
   );
@@ -129,6 +142,7 @@ export const AdminGarageManager: React.FC<AdminGarageManagerProps> = ({ garages,
               <th className="py-3 px-4">رسم الفحص</th>
               <th className="py-3 px-4">الحساب المرتبط</th>
               <th className="py-3 px-4 text-center">حالة الاعتماد</th>
+              <th className="py-3 px-4 text-center">إجراءات</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -170,6 +184,16 @@ export const AdminGarageManager: React.FC<AdminGarageManagerProps> = ({ garages,
                     >
                       {garage.isVerified ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
                       {garage.isVerified ? 'معتمد' : 'موقوف'}
+                    </button>
+                  </td>
+                  {/* 🔥 زر الحذف الجديد */}
+                  <td className="py-3 px-4 text-center">
+                    <button
+                      onClick={() => handleDeleteGarage(garage.id)}
+                      className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                      title="حذف الكراج نهائياً"
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </td>
                 </tr>
