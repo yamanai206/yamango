@@ -9,7 +9,8 @@ import {
   InspectionRequest,
   CommissionRatesConfig,
   AdminSecurityProfile,
-  AuditLogEntry
+  AuditLogEntry,
+  UserRole
 } from '../types';
 import { 
   ShieldCheck, 
@@ -54,7 +55,8 @@ import { CommissionControlPanel } from './CommissionControlPanel';
 import { AgentManager } from './AgentManager';
 import { AdminSecuritySettings } from './AdminSecuritySettings';
 import { AdminInspectionRequestsTable } from './AdminInspectionRequestsTable';
-import { AdminListingsModeration } from './AdminListingsModeration'; // 🔥 استيراد المكون الجديد
+import { AdminListingsModeration } from './AdminListingsModeration';
+import { AdminUserManager } from './AdminUserManager'; // 🔥 استيراد إدارة المستخدمين
 import { processOfflineNotificationQueue, getStoredWhatsAppConfig } from '../services/whatsapp';
 
 interface AdminDashboardViewProps {
@@ -78,20 +80,20 @@ interface AdminDashboardViewProps {
   admins: AdminSecurityProfile[];
   auditLogs: AuditLogEntry[];
   onToggle2fa: (adminId: string) => boolean;
-  // 🔥 الخصائص الجديدة للتحكم بالإعلانات
   onUpdateListingStatus: (listingId: string, status: Listing['status']) => Promise<boolean>;
   onDeleteListing: (listingId: string) => Promise<boolean>;
   onViewListing: (listing: Listing) => void;
+  onUpdateUserRole: (userId: string, role: UserRole) => Promise<boolean>; // 🔥 خاصية إدارة المستخدمين
 }
 
-export type AdminSubTab = 'overview' | 'commissions' | 'agents' | 'contracts' | 'garages_calendar' | 'currency' | 'notifications' | 'security' | 'moderation';
+export type AdminSubTab = 'overview' | 'commissions' | 'agents' | 'contracts' | 'garages_calendar' | 'currency' | 'notifications' | 'security' | 'moderation' | 'users';
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   listings, deals, garages, agents, onOpenSqlModal, currencyConfig, onUpdateExchangeRate,
   appointments, onBookAppointment, onUpdateAppointmentStatus, inspectionRequests,
   commissionRates, onUpdateCommissionRates, onAddAgent, onRemoveAgent, onToggleAgentStatus,
   onRegenerateOtp, admins, auditLogs, onToggle2fa,
-  onUpdateListingStatus, onDeleteListing, onViewListing
+  onUpdateListingStatus, onDeleteListing, onViewListing, onUpdateUserRole
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>('overview');
   const [promotedCap, setPromotedCap] = useState(5);
@@ -109,7 +111,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const completedDealsCount = useMemo(() => deals.filter((d) => d.status === 'completed').length, [deals]);
   const activeListingsCount = useMemo(() => listings.filter((l) => l.status === 'active').length, [listings]);
   const certifiedGaragesCount = useMemo(() => garages.filter((g) => g.isVerified).length, [garages]);
-  const completionRatePercent = deals.length > 0 ? Math.round((completedDealsCount / deals.length) * 100) : 0;
 
   const handleProcessDeferred = async () => {
     if (isProcessingDeferred) return;
@@ -119,11 +120,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       const config = getStoredWhatsAppConfig();
       const res = await processOfflineNotificationQueue(config);
       if (res.deliveredCount > 0) {
-        setDeferredNotice({ type: 'success', message: `تم تفعيل الإرسال المؤجل بنجاح! تم تسليم ${res.deliveredCount} إشعار تراكم أثناء انقطاع الشبكة، وما زال ${res.stillPendingCount} في الانتظار.` });
+        setDeferredNotice({ type: 'success', message: `تم تفعيل الإرسال المؤجل بنجاح! تم تسليم ${res.deliveredCount} إشعار.` });
       } else if (res.processedCount === 0) {
         setDeferredNotice({ type: 'info', message: 'لا توجد إشعارات متراكمة في طابور الإرسال المؤجل حالياً.' });
       } else {
-        setDeferredNotice({ type: 'info', message: `تم فحص طابور الإرسال المؤجل (${res.processedCount} إشعار): بانتظار توفر استجابة بوابة الـ API الخارجية (${res.stillPendingCount} قيد الانتظار).` });
+        setDeferredNotice({ type: 'info', message: `تم فحص طابور الإرسال المؤجل (${res.processedCount} إشعار): بانتظار استجابة بوابة API.` });
       }
     } catch (e: any) {
       setDeferredNotice({ type: 'error', message: `تعذر تفعيل الإرسال المؤجل: ${e?.message || 'خطأ غير معروف'}` });
@@ -197,7 +198,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </div>
         </div>
 
-        {/* 🔥 ويدجت جديدة للإعلانات المعلقة */}
         <div onClick={() => setActiveSubTab('moderation')} className="bg-white rounded-2xl border border-amber-200/90 p-4 shadow-xs hover:shadow-md transition-all cursor-pointer group relative overflow-hidden text-right">
           <div className="absolute top-0 right-0 w-1.5 h-full bg-amber-500 rounded-r-2xl" />
           <div className="flex items-center justify-between mb-2">
@@ -228,8 +228,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         <button onClick={() => setActiveSubTab('overview')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'overview' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
           <TrendingUp className="w-3.5 h-3.5 text-orange-400" /><span>نظرة عامة</span>
         </button>
-        
-        {/* 🔥 تبويب المراجعة الجديد */}
+
+        {/* 🔥 تبويب إدارة المستخدمين الجديد */}
+        <button onClick={() => setActiveSubTab('users')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'users' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
+          <Users className="w-3.5 h-3.5 text-indigo-400" />
+          <span>إدارة المستخدمين</span>
+        </button>
+
         <button onClick={() => setActiveSubTab('moderation')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'moderation' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
           <AlertTriangle className="w-3.5 h-3.5" />
           <span>مراجعة الإعلانات</span>
@@ -255,18 +260,18 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           <Send className="w-3.5 h-3.5" /><span>طابور الواتساب</span>
         </button>
         <button onClick={() => setActiveSubTab('security')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'security' ? 'bg-rose-700 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          <ShieldCheck className="w-3.5 h-3.5 text-rose-300" /><span>الأمان ({auditLogs.length})</span>
+          <ShieldCheck className="w-3.5 h-3.5 text-rose-300" /><span>الأمان وسجل التدقيق ({auditLogs.length})</span>
         </button>
       </div>
 
+      {/* SUB-TAB: USER MANAGER */}
+      {activeSubTab === 'users' && (
+        <AdminUserManager onUpdateRole={onUpdateUserRole} />
+      )}
+
       {/* SUB-TAB: MODERATION */}
       {activeSubTab === 'moderation' && (
-        <AdminListingsModeration 
-          listings={listings} 
-          onUpdateStatus={onUpdateListingStatus} 
-          onDeleteListing={onDeleteListing} 
-          onViewListing={onViewListing}
-        />
+        <AdminListingsModeration listings={listings} onUpdateStatus={onUpdateListingStatus} onDeleteListing={onDeleteListing} onViewListing={onViewListing} />
       )}
 
       {/* SUB-TAB 1: OVERVIEW */}
