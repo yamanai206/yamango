@@ -27,7 +27,8 @@ import { AgentManager } from './AgentManager';
 import { AdminSecuritySettings } from './AdminSecuritySettings';
 import { AdminInspectionRequestsTable } from './AdminInspectionRequestsTable';
 import { AdminListingsModeration } from './AdminListingsModeration';
-import { AdminUserManager } from './AdminUserManager'; // ✅ إدارة المستخدمين
+import { AdminUserManager } from './AdminUserManager';
+import { AdminGarageManager } from './AdminGarageManager'; // 🔥 استيراد إدارة الكراجات
 import { processOfflineNotificationQueue, getStoredWhatsAppConfig } from '../services/whatsapp';
 
 interface AdminDashboardViewProps {
@@ -55,19 +56,21 @@ interface AdminDashboardViewProps {
   onDeleteListing: (listingId: string) => Promise<boolean>;
   onViewListing: (listing: Listing) => void;
   onUpdateUserRole: (userId: string, role: UserRole) => Promise<boolean>;
+  onRefreshGarages: () => void; // 🔥 خاصية تحديث الكراجات
 }
 
-export type AdminSubTab = 'overview' | 'commissions' | 'agents' | 'contracts' | 'garages_calendar' | 'currency' | 'notifications' | 'security' | 'moderation' | 'users';
+export type AdminSubTab = 'overview' | 'commissions' | 'agents' | 'contracts' | 'garages_calendar' | 'garage_mgr' | 'currency' | 'notifications' | 'security' | 'moderation' | 'users';
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   listings, deals, garages, agents, onOpenSqlModal, currencyConfig, onUpdateExchangeRate,
   appointments, onBookAppointment, onUpdateAppointmentStatus, inspectionRequests,
   commissionRates, onUpdateCommissionRates, onAddAgent, onRemoveAgent, onToggleAgentStatus,
   onRegenerateOtp, admins, auditLogs, onToggle2fa,
-  onUpdateListingStatus, onDeleteListing, onViewListing, onUpdateUserRole
+  onUpdateListingStatus, onDeleteListing, onViewListing, onUpdateUserRole, onRefreshGarages
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>('overview');
   const [promotedCap, setPromotedCap] = useState(5);
+
   const [isProcessingDeferred, setIsProcessingDeferred] = useState(false);
   const [deferredNotice, setDeferredNotice] = useState<{ type: 'success' | 'info' | 'error'; message: string } | null>(null);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -133,12 +136,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       )}
 
-      {/* 🔥 أزرار وصول سريع (لضمان عدم ضياع التبويبات) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {/* 🔥 أزرار وصول سريع */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <button onClick={() => setActiveSubTab('users')} className="bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-2xl shadow-md transition-all flex items-center justify-between group">
           <div className="text-right">
             <span className="text-sm font-black block">إدارة المستخدمين والصلاحيات</span>
-            <span className="text-xs text-indigo-200 mt-1 block">عرض جميع الحسابات وتعديل أدوارهم (مشتري، بائع، وكيل...)</span>
+            <span className="text-xs text-indigo-200 mt-1 block">عرض جميع الحسابات وتعديل أدوارهم</span>
           </div>
           <Users className="w-8 h-8 text-indigo-300 group-hover:scale-110 transition-transform" />
         </button>
@@ -146,9 +149,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         <button onClick={() => setActiveSubTab('moderation')} className="bg-amber-500 hover:bg-amber-600 text-slate-900 p-4 rounded-2xl shadow-md transition-all flex items-center justify-between group">
           <div className="text-right">
             <span className="text-sm font-black block">مراجعة الإعلانات الجديدة</span>
-            <span className="text-xs text-amber-900 mt-1 block">لديك {pendingListingsCount} إعلان بانتظار الموافقة والنشر</span>
+            <span className="text-xs text-amber-900 mt-1 block">لديك {pendingListingsCount} إعلان بانتظار الموافقة</span>
           </div>
           <AlertTriangle className="w-8 h-8 text-amber-800 group-hover:scale-110 transition-transform" />
+        </button>
+
+        <button onClick={() => setActiveSubTab('garage_mgr')} className="bg-orange-600 hover:bg-orange-700 text-white p-4 rounded-2xl shadow-md transition-all flex items-center justify-between group">
+          <div className="text-right">
+            <span className="text-sm font-black block">إدارة الكراجات المعتمدة</span>
+            <span className="text-xs text-orange-200 mt-1 block">إضافة كراجات جديدة وربط حساباتهم</span>
+          </div>
+          <Wrench className="w-8 h-8 text-orange-300 group-hover:scale-110 transition-transform" />
         </button>
       </div>
 
@@ -169,32 +180,53 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           <div className="flex items-center justify-between mb-2"><span className="text-xs font-bold text-amber-800">إعلانات بانتظار المراجعة</span><span className="p-2 bg-amber-50 text-amber-600 rounded-xl group-hover:scale-105 transition-transform"><AlertTriangle className="w-4 h-4" /></span></div>
           <div className="flex items-baseline gap-2"><span className="text-2xl font-black text-amber-600 tabular-nums">{pendingListingsCount}</span><span className="text-xs font-semibold text-amber-700">تحتاج موافقة</span></div>
         </div>
-        <div onClick={() => setActiveSubTab('garages_calendar')} className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs hover:shadow-md transition-all cursor-pointer group relative overflow-hidden text-right">
+        <div onClick={() => setActiveSubTab('garage_mgr')} className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs hover:shadow-md transition-all cursor-pointer group relative overflow-hidden text-right">
           <div className="absolute top-0 right-0 w-1.5 h-full bg-orange-500 rounded-r-2xl" />
           <div className="flex items-center justify-between mb-2"><span className="text-xs font-bold text-slate-600">الكراجات الفنية المعتمدة</span><span className="p-2 bg-orange-50 text-orange-600 rounded-xl group-hover:scale-105 transition-transform"><Wrench className="w-4 h-4" /></span></div>
           <div className="flex items-baseline gap-2"><span className="text-2xl font-black text-slate-900 tabular-nums">{certifiedGaragesCount}</span><span className="text-xs font-semibold text-slate-500">كراج معتمد</span></div>
         </div>
       </div>
 
-      {/* Navigation Sub-Tabs (الشريط الأفقي) */}
+      {/* Navigation Sub-Tabs */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 bg-white p-2 rounded-2xl border border-slate-200 shadow-xs">
         <button onClick={() => setActiveSubTab('overview')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'overview' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><TrendingUp className="w-3.5 h-3.5 text-orange-400" /><span>نظرة عامة</span></button>
-        <button onClick={() => setActiveSubTab('users')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'users' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><Users className="w-3.5 h-3.5 text-indigo-400" /><span>إدارة المستخدمين</span></button>
+        <button onClick={() => setActiveSubTab('users')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'users' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><Users className="w-3.5 h-3.5 text-indigo-400" /><span>المستخدمين</span></button>
         <button onClick={() => setActiveSubTab('moderation')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'moderation' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><AlertTriangle className="w-3.5 h-3.5" /><span>مراجعة الإعلانات</span>{pendingListingsCount > 0 && <span className="bg-rose-500 text-white text-[10px] px-1.5 rounded-full ml-1">{pendingListingsCount}</span>}</button>
+        <button onClick={() => setActiveSubTab('garage_mgr')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'garage_mgr' ? 'bg-orange-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><Wrench className="w-3.5 h-3.5 text-orange-200" /><span>إدارة الكراجات</span></button>
         <button onClick={() => setActiveSubTab('commissions')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'commissions' ? 'bg-orange-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><Percent className="w-3.5 h-3.5" /><span>العمولات والأرباح</span></button>
         <button onClick={() => setActiveSubTab('agents')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'agents' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><Building className="w-3.5 h-3.5 text-emerald-400" /><span>وكلاء الدفع ({agents.length})</span></button>
         <button onClick={() => setActiveSubTab('contracts')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'contracts' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><FileCheck className="w-3.5 h-3.5 text-emerald-400" /><span>العقود ({deals.length})</span></button>
         <button onClick={() => setActiveSubTab('garages_calendar')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'garages_calendar' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><Activity className="w-3.5 h-3.5 text-blue-400" /><span>إشغال الكراجات</span></button>
         <button onClick={() => setActiveSubTab('currency')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'currency' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><Coins className="w-3.5 h-3.5 text-orange-400" /><span>أسعار الصرف</span></button>
         <button onClick={() => setActiveSubTab('notifications')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'notifications' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><Send className="w-3.5 h-3.5" /><span>طابور الواتساب</span></button>
+        <button onClick={() => setActiveSubTab('security')} className={`px-3.5 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeSubTab === 'security' ? 'bg-rose-700 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}><ShieldCheck className="w-3.5 h-3.5 text-rose-300" /><span>الأمان ({auditLogs.length})</span></button>
       </div>
 
       {/* CONTENT TABS */}
       {activeSubTab === 'users' && <AdminUserManager onUpdateRole={onUpdateUserRole} />}
       {activeSubTab === 'moderation' && <AdminListingsModeration listings={listings} onUpdateStatus={onUpdateListingStatus} onDeleteListing={onDeleteListing} onViewListing={onViewListing} />}
+      {activeSubTab === 'garage_mgr' && <AdminGarageManager garages={garages} onRefresh={onRefreshGarages} />}
 
       {activeSubTab === 'overview' && (
         <div className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+              <div className="flex items-center justify-between text-slate-400 mb-2"><span className="font-semibold">حجم التداول بالدولار</span><TrendingUp className="w-4 h-4 text-emerald-600" /></div>
+              <div className="text-xl font-black text-slate-900 tabular-nums">${totalTradingVolumeUSD.toLocaleString()}</div>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+              <div className="flex items-center justify-between text-slate-400 mb-2"><span className="font-semibold">إجمالي العمولات</span><Receipt className="w-4 h-4 text-orange-600" /></div>
+              <div className="text-xl font-black text-orange-700 tabular-nums">${totalCommissionUSD.toLocaleString()}</div>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+              <div className="flex items-center justify-between text-slate-400 mb-2"><span className="font-semibold">الكراجات المعتمدة</span><Wrench className="w-4 h-4 text-blue-600" /></div>
+              <div className="text-xl font-black text-slate-900 tabular-nums">{garages.length} كراجات</div>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+              <div className="flex items-center justify-between text-slate-400 mb-2"><span className="font-semibold">الإعلانات المروجة</span><Sparkles className="w-4 h-4 text-orange-500" /></div>
+              <div className="text-xl font-black text-slate-900 tabular-nums">{promotedListingsCount} إعلانات</div>
+            </div>
+          </div>
           <PlatformEfficiencyPanel deals={deals} />
           <DealGrowthLineChart deals={deals} />
           <DealStatusPieChart deals={deals} />
@@ -235,7 +267,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           <WhatsAppSettingsCard promotedListings={listings.filter((l) => l.isPromoted)} />
         </div>
       )}
-      
+
       {activeSubTab === 'security' && <AdminSecuritySettings admins={admins} auditLogs={auditLogs} onToggle2fa={onToggle2fa} />}
     </div>
   );

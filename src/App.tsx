@@ -277,9 +277,31 @@ export default function App() {
 
         {activeTab === 'admin' && store.currentUser.roles.includes('admin') && (
           <AdminDashboardView
-            listings={store.rawListings} deals={store.deals} garages={store.garages} agents={store.agents} onOpenSqlModal={() => setIsSqlModalOpen(true)} currencyConfig={store.currencyConfig} onUpdateExchangeRate={store.updateExchangeRate} appointments={store.appointments} onBookAppointment={store.bookAppointment} onUpdateAppointmentStatus={store.updateAppointmentStatus} inspectionRequests={store.inspectionRequests} commissionRates={store.commissionRates} onUpdateCommissionRates={store.updateCommissionRates} onAddAgent={store.addPaymentAgent} onRemoveAgent={store.removePaymentAgent} onToggleAgentStatus={store.toggleAgentStatus} onRegenerateOtp={store.regenerateDealOtp} admins={store.admins} auditLogs={store.auditLogs} onToggle2fa={store.toggleAdmin2fa}
-            onUpdateListingStatus={store.updateListingStatus} onDeleteListing={store.deleteListing} onViewListing={(listing) => setSelectedListing(listing)}
-            onUpdateUserRole={store.updateUserRole} // <-- تم تمرير الخاصية الجديدة هنا
+            listings={store.rawListings} 
+            deals={store.deals} 
+            garages={store.garages} 
+            agents={store.agents} 
+            onOpenSqlModal={() => setIsSqlModalOpen(true)} 
+            currencyConfig={store.currencyConfig} 
+            onUpdateExchangeRate={store.updateExchangeRate} 
+            appointments={store.appointments} 
+            onBookAppointment={store.bookAppointment} 
+            onUpdateAppointmentStatus={store.updateAppointmentStatus} 
+            inspectionRequests={store.inspectionRequests} 
+            commissionRates={store.commissionRates} 
+            onUpdateCommissionRates={store.updateCommissionRates} 
+            onAddAgent={store.addPaymentAgent} 
+            onRemoveAgent={store.removePaymentAgent} 
+            onToggleAgentStatus={store.toggleAgentStatus} 
+            onRegenerateOtp={store.regenerateDealOtp} 
+            admins={store.admins} 
+            auditLogs={store.auditLogs} 
+            onToggle2fa={store.toggleAdmin2fa}
+            onUpdateListingStatus={store.updateListingStatus}
+            onDeleteListing={store.deleteListing}
+            onViewListing={(listing) => setSelectedListing(listing)}
+            onUpdateUserRole={store.updateUserRole}
+            onRefreshGarages={store.fetchGarages} /* 🔥 تمرير الدالة الجديدة هنا */
           />
         )}
       </main>
