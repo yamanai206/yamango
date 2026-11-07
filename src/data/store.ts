@@ -7,7 +7,7 @@ import {
 } from '../types';
 import { 
   SEED_AGENTS, SEED_PROMOTION_PACKAGES, SEED_APPOINTMENTS, DEFAULT_CURRENCY_CONFIG,
-  DEFAULT_COMMISSION_RATES, SEED_ADMINS, SEED_AUDIT_LOGS, SEED_GARAGE_REVIEWS,
+  DEFAULT_COMMISSION_RATES, SEED_ADMINS, SEED_AUDIT_LOGS
 } from './seedData';
 import { rankListings, ListingFilter } from '../utils/ranking';
 import { calculateEscrowCommission, generateAgentVerificationOtp } from '../utils/escrow';
@@ -19,7 +19,6 @@ const STORAGE_KEY_APPOINTMENTS = 'yamango_appointments_v1';
 const STORAGE_KEY_COMMISSION = 'yamango_commission_rates_v1';
 const STORAGE_KEY_ADMINS = 'yamango_admins_v1';
 const STORAGE_KEY_AUDIT_LOGS = 'yamango_audit_logs_v1';
-const STORAGE_KEY_REVIEWS = 'yamango_garage_reviews_v1';
 const STORAGE_KEY_LANGUAGE = 'yamango_language_v1';
 
 export function useYamangoStore() {
@@ -38,6 +37,7 @@ export function useYamangoStore() {
   const [usedItems, setUsedItems] = useState<UsedItem[]>([]);
   const [usedItemOrders, setUsedItemOrders] = useState<UsedItemOrder[]>([]);
   const [agents, setAgents] = useState<PaymentAgent[]>([]);
+  const [reviews, setReviews] = useState<GarageReview[]>([]); // 🔥 التقييمات السحابية
 
   // --- Config State ---
   const [currencyConfig, setCurrencyConfig] = useState<CurrencyRateConfig>(() => {
@@ -54,9 +54,6 @@ export function useYamangoStore() {
   });
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => {
     try { const saved = localStorage.getItem(STORAGE_KEY_AUDIT_LOGS); return saved ? JSON.parse(saved) : SEED_AUDIT_LOGS; } catch { return SEED_AUDIT_LOGS; }
-  });
-  const [reviews, setReviews] = useState<GarageReview[]>(() => {
-    try { const saved = localStorage.getItem(STORAGE_KEY_REVIEWS); return saved ? JSON.parse(saved) : SEED_GARAGE_REVIEWS; } catch { return SEED_GARAGE_REVIEWS; }
   });
   const [language, setLanguageState] = useState<'ar' | 'en'>(() => {
     try { const saved = localStorage.getItem(STORAGE_KEY_LANGUAGE); return saved === 'en' ? 'en' : 'ar'; } catch { return 'ar'; }
@@ -143,6 +140,26 @@ export function useYamangoStore() {
     } catch (error) { console.error("Error fetching garages:", error); }
   };
 
+  // 🔥 جلب التقييمات من السحابة
+  const fetchReviews = async () => {
+    try {
+      const { data, error } = await supabase.from('garage_reviews').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data) {
+        setReviews(data.map((item) => ({
+          id: item.id,
+          garageId: item.garage_id,
+          userName: item.user_name,
+          rating: item.rating,
+          comment: item.comment,
+          date: new Date(item.created_at).toISOString().split('T')[0],
+          createdAt: item.created_at,
+          verifiedInspection: item.verified_inspection,
+        })));
+      }
+    } catch (error) { console.error("Error fetching reviews:", error); }
+  };
+
   const fetchInspectionRequests = async () => {
     try {
       const { data, error } = await supabase.from('inspection_requests').select('*, listings(title)').order('created_at', { ascending: false });
@@ -203,7 +220,6 @@ export function useYamangoStore() {
     } catch (error) { console.error("Error fetching agents:", error); }
   };
 
-  // --- Fetch All Users (Admin Only) ---
   const fetchAllUsers = async () => {
     try {
       const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
@@ -215,7 +231,6 @@ export function useYamangoStore() {
     }
   };
 
-  // --- Update User Role ---
   const updateUserRole = async (userId: string, newRole: UserRole) => {
     try {
       const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
@@ -231,7 +246,7 @@ export function useYamangoStore() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) fetchProfile(session.user.id); else setIsAuthLoading(false);
     });
-    fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); fetchUsedItems(); fetchUsedItemOrders(); fetchAgents();
+    fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); fetchUsedItems(); fetchUsedItemOrders(); fetchAgents(); fetchReviews();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) { fetchProfile(session.user.id); fetchDeals(); fetchInspectionRequests(); fetchUsedItemOrders(); } 
@@ -247,9 +262,8 @@ export function useYamangoStore() {
       localStorage.setItem(STORAGE_KEY_COMMISSION, JSON.stringify(commissionRates));
       localStorage.setItem(STORAGE_KEY_ADMINS, JSON.stringify(admins));
       localStorage.setItem(STORAGE_KEY_AUDIT_LOGS, JSON.stringify(auditLogs));
-      localStorage.setItem(STORAGE_KEY_REVIEWS, JSON.stringify(reviews));
     } catch (e) {}
-  }, [currencyConfig, appointments, commissionRates, admins, auditLogs, reviews]);
+  }, [currencyConfig, appointments, commissionRates, admins, auditLogs]);
 
   const logout = async () => { await supabase.auth.signOut(); };
   const switchRole = (role: UserRole) => { if (currentUser?.roles.includes(role) || currentUser?.roles.includes('admin')) setActiveRole(role); };
@@ -501,6 +515,7 @@ export function useYamangoStore() {
   const removePaymentAgent = (agentId: string) => { setAgents((prev) => prev.filter((a) => a.id !== agentId)); return true; };
   const toggleAgentStatus = (agentId: string) => { setAgents((prev) => prev.map((a) => (a.id === agentId ? { ...a, isActive: !a.isActive } : a))); };
   const regenerateDealOtp = (dealId: string, customCode?: string) => { const freshCode = customCode ? customCode.trim().toUpperCase() : generateAgentVerificationOtp(); setDeals((prev) => prev.map((d) => (d.id === dealId ? { ...d, secretOtp: freshCode } : d))); return freshCode; };
+  
   const toggleAdmin2fa = (adminId: string) => {
     let toggledName = ''; let newStatus = false;
     setAdmins((prev) => prev.map((adm) => { if (adm.id === adminId) { newStatus = !adm.twoFactorEnabled; toggledName = adm.fullName; return { ...adm, twoFactorEnabled: newStatus }; } return adm; }));
@@ -513,16 +528,34 @@ export function useYamangoStore() {
     const newEntry: AuditLogEntry = { ...entry, id: `aud_${Date.now()}`, timestamp: `${timeStr} بتوقيت دمشق`, timestampMs: Date.now() };
     setAuditLogs((prev) => [newEntry, ...prev]); return newEntry;
   };
-  const addGarageReview = (reviewData: Omit<GarageReview, 'id' | 'createdAt'>) => {
-    const newReview: GarageReview = { ...reviewData, id: `rev_${Date.now()}`, createdAt: Date.now() };
-    const updatedReviews = [newReview, ...reviews]; setReviews(updatedReviews);
-    const targetGarageReviews = updatedReviews.filter((r) => r.garageId === reviewData.garageId);
-    const avg = targetGarageReviews.length > 0 ? Math.round((targetGarageReviews.reduce((acc, r) => acc + r.rating, 0) / targetGarageReviews.length) * 10) / 10 : 5.0;
-    setGarages((prev) => prev.map((g) => (g.id === reviewData.garageId ? { ...g, ratingAvg: avg, reviewsCount: targetGarageReviews.length } : g)));
-    return newReview;
+
+  // 🔥 دالة إضافة التقييم السحابية
+  const addGarageReview = async (reviewData: Omit<GarageReview, 'id' | 'createdAt'>) => {
+    if (!currentUser) return null;
+    try {
+      const { error } = await supabase.from('garage_reviews').insert([{
+        garage_id: reviewData.garageId,
+        user_id: currentUser.id,
+        user_name: reviewData.userName,
+        rating: reviewData.rating,
+        comment: reviewData.comment,
+        verified_inspection: reviewData.verifiedInspection,
+      }]);
+      if (error) throw error;
+      
+      // سيتم تحديث تقييم الكراج تلقائياً في قاعدة البيانات بفضل الـ Trigger
+      await fetchReviews();
+      await fetchGarages(); // لتحديث الواجهة بمتوسط التقييم الجديد
+      
+      return { ...reviewData, id: 'temp', createdAt: Date.now() };
+    } catch (error: any) {
+      alert("حدث خطأ أثناء إضافة المراجعة: " + error.message);
+      return null;
+    }
   };
+
   const resetToSeedData = () => { 
-    fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); fetchUsedItems(); fetchUsedItemOrders(); fetchAgents();
+    fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); fetchUsedItems(); fetchUsedItemOrders(); fetchAgents(); fetchReviews();
     localStorage.clear(); window.location.reload(); 
   };
 
@@ -534,6 +567,6 @@ export function useYamangoStore() {
     language, setLanguage, filter, setFilter, promoteListing, addListing, requestInspection, submitInspectionReport, createDeal, confirmEscrowByAgent,
     confirmDeliveryAndClose, updateExchangeRate, bookAppointment, updateAppointmentStatus, updateListingServiceNotes,
     usedItems, usedItemOrders, addUsedItem, purchaseUsedItem, updateUsedOrderStatus, deleteUsedItem, resetToSeedData,
-    updateListingStatus, deleteListing, fetchAllUsers, updateUserRole // <-- تصدير الدوال الجديدة
+    updateListingStatus, deleteListing, fetchAllUsers, updateUserRole
   };
 }
