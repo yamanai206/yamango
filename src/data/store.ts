@@ -14,8 +14,6 @@ import { calculateEscrowCommission, generateAgentVerificationOtp } from '../util
 import { calculateUsedItemCommission, generateUsedItemOtp, generateUsedOrderId } from '../utils/usedGoods';
 import { supabase } from '../lib/supabase';
 
-const STORAGE_KEY_CURRENCY = 'yamango_currency_v1';
-const STORAGE_KEY_COMMISSION = 'yamango_commission_rates_v1';
 const STORAGE_KEY_ADMINS = 'yamango_admins_v1';
 const STORAGE_KEY_AUDIT_LOGS = 'yamango_audit_logs_v1';
 const STORAGE_KEY_LANGUAGE = 'yamango_language_v1';
@@ -37,15 +35,12 @@ export function useYamangoStore() {
   const [usedItemOrders, setUsedItemOrders] = useState<UsedItemOrder[]>([]);
   const [agents, setAgents] = useState<PaymentAgent[]>([]);
   const [reviews, setReviews] = useState<GarageReview[]>([]);
-  const [appointments, setAppointments] = useState<FieldInspectionAppointment[]>([]); // 🔥 مواعيد من السحابة
+  const [appointments, setAppointments] = useState<FieldInspectionAppointment[]>([]);
 
-  // --- Config State ---
-  const [currencyConfig, setCurrencyConfig] = useState<CurrencyRateConfig>(() => {
-    try { const saved = localStorage.getItem(STORAGE_KEY_CURRENCY); return saved ? JSON.parse(saved) : DEFAULT_CURRENCY_CONFIG; } catch { return DEFAULT_CURRENCY_CONFIG; }
-  });
-  const [commissionRates, setCommissionRates] = useState<CommissionRatesConfig>(() => {
-    try { const saved = localStorage.getItem(STORAGE_KEY_COMMISSION); return saved ? JSON.parse(saved) : DEFAULT_COMMISSION_RATES; } catch { return DEFAULT_COMMISSION_RATES; }
-  });
+  // --- Config State (Cloud Synced) ---
+  const [currencyConfig, setCurrencyConfig] = useState<CurrencyRateConfig>(DEFAULT_CURRENCY_CONFIG);
+  const [commissionRates, setCommissionRates] = useState<CommissionRatesConfig>(DEFAULT_COMMISSION_RATES);
+  
   const [admins, setAdmins] = useState<AdminSecurityProfile[]>(() => {
     try { const saved = localStorage.getItem(STORAGE_KEY_ADMINS); return saved ? JSON.parse(saved) : SEED_ADMINS; } catch { return SEED_ADMINS; }
   });
@@ -78,6 +73,21 @@ export function useYamangoStore() {
         setIsAuthenticated(true);
       }
     } catch (err) { console.error("Auth error:", err); } finally { setIsAuthLoading(false); }
+  };
+
+  const fetchSettings = async () => {
+    try {
+      const { data, error } = await supabase.from('settings').select('*');
+      if (error) throw error;
+      
+      if (data) {
+        const currConfig = data.find(s => s.key === 'currency_config')?.value;
+        const commRates = data.find(s => s.key === 'commission_rates')?.value;
+        
+        if (currConfig) setCurrencyConfig(currConfig as CurrencyRateConfig);
+        if (commRates) setCommissionRates(commRates as CommissionRatesConfig);
+      }
+    } catch (error) { console.error("Error fetching settings:", error); }
   };
 
   const fetchListings = async () => {
@@ -216,19 +226,10 @@ export function useYamangoStore() {
       if (error) throw error;
       if (data) {
         setAppointments(data.map(item => ({
-          id: item.id,
-          listingId: item.listing_id,
-          listingTitle: item.listing_title,
-          customerName: item.customer_name,
-          customerPhone: item.customer_phone,
-          appointmentDate: item.appointment_date,
-          appointmentTime: item.appointment_time,
-          location: item.location,
-          zone: item.zone as ZoneLocation,
-          notes: item.notes,
-          status: item.status as FieldInspectionAppointment['status'],
-          assignedInspector: item.assigned_inspector,
-          createdAt: item.created_at
+          id: item.id, listingId: item.listing_id, listingTitle: item.listing_title, customerName: item.customer_name,
+          customerPhone: item.customer_phone, appointmentDate: item.appointment_date, appointmentTime: item.appointment_time,
+          location: item.location, zone: item.zone as ZoneLocation, notes: item.notes,
+          status: item.status as FieldInspectionAppointment['status'], assignedInspector: item.assigned_inspector, createdAt: item.created_at
         })));
       }
     } catch (error) { console.error("Error fetching appointments:", error); }
@@ -260,6 +261,7 @@ export function useYamangoStore() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) fetchProfile(session.user.id); else setIsAuthLoading(false);
     });
+    fetchSettings(); // 🔥 جلب الإعدادات من السحابة
     fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); fetchUsedItems(); fetchUsedItemOrders(); fetchAgents(); fetchReviews(); fetchAppointments();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -271,12 +273,10 @@ export function useYamangoStore() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_CURRENCY, JSON.stringify(currencyConfig));
-      localStorage.setItem(STORAGE_KEY_COMMISSION, JSON.stringify(commissionRates));
       localStorage.setItem(STORAGE_KEY_ADMINS, JSON.stringify(admins));
       localStorage.setItem(STORAGE_KEY_AUDIT_LOGS, JSON.stringify(auditLogs));
     } catch (e) {}
-  }, [currencyConfig, commissionRates, admins, auditLogs]);
+  }, [admins, auditLogs]);
 
   const logout = async () => { await supabase.auth.signOut(); };
   const switchRole = (role: UserRole) => { if (currentUser?.roles.includes(role) || currentUser?.roles.includes('admin')) setActiveRole(role); };
@@ -284,6 +284,40 @@ export function useYamangoStore() {
   const [filter, setFilter] = useState<ListingFilter>({ zone: 'all', category: 'all', operation: 'all', searchQuery: '', inspectedOnly: false });
   const visibleListings = listings.filter(l => l.status === 'active' || l.userId === currentUser?.id || currentUser?.roles.includes('admin'));
   const rankedData = rankListings(visibleListings, filter, 5);
+
+  // 🔥 تحديث سعر الصرف في السحابة
+  const updateExchangeRate = async (newRate: number, autoRecalculate: boolean = true) => {
+    if (newRate <= 0) return { success: false, message: 'سعر الصرف يجب أن يكون أكبر من الصفر' };
+    
+    const newConfig: CurrencyRateConfig = { 
+      usdToSypRate: newRate, 
+      lastUpdated: new Date().toISOString().slice(0, 10), 
+      autoUpdateListings: autoRecalculate, 
+      sourceNote: `سعر محدث يدوياً (${newRate.toLocaleString()} ل.س)` 
+    };
+
+    try {
+      const { error } = await supabase.from('settings').update({ value: newConfig }).eq('key', 'currency_config');
+      if (error) throw error;
+      
+      setCurrencyConfig(newConfig); // تحديث الواجهة فوراً
+      return { success: true, newRate, listingsUpdated: 0, dealsUpdated: 0, message: `تم تحديث سعر الصرف بنجاح إلى ${newRate.toLocaleString()} ل.س` };
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
+  };
+
+  // 🔥 تحديث العمولات في السحابة
+  const updateCommissionRates = async (newRates: Partial<CommissionRatesConfig>) => {
+    const updatedRates = { ...commissionRates, ...newRates, lastUpdated: new Date().toISOString().slice(0, 10) };
+    try {
+      const { error } = await supabase.from('settings').update({ value: updatedRates }).eq('key', 'commission_rates');
+      if (error) throw error;
+      setCommissionRates(updatedRates);
+    } catch (error) {
+      console.error("Error saving commission rates:", error);
+    }
+  };
 
   const promoteListing = async (listingId: string, packageId: string) => {
     const pkg = SEED_PROMOTION_PACKAGES.find((p) => p.id === packageId);
@@ -510,63 +544,34 @@ export function useYamangoStore() {
     } catch (error) { alert("تعذر حذف الغرض."); }
   };
 
-  const updateExchangeRate = (newRate: number, autoRecalculate: boolean = true) => {
-    if (newRate <= 0) return { success: false, message: 'سعر الصرف يجب أن يكون أكبر من الصفر' };
-    setCurrencyConfig({ usdToSypRate: newRate, lastUpdated: new Date().toISOString().slice(0, 10), autoUpdateListings: autoRecalculate, sourceNote: `سعر محدث يدوياً` });
-    return { success: true, newRate, listingsUpdated: 0, dealsUpdated: 0, message: `تم التحديث إلى ${newRate} ل.س` };
-  };
-
   const bookAppointment = async (data: Omit<FieldInspectionAppointment, 'id' | 'createdAt'>) => {
     try {
       const { data: inserted, error } = await supabase.from('appointments').insert([{
-        listing_id: data.listingId,
-        listing_title: data.listingTitle,
-        customer_name: data.customerName,
-        customer_phone: data.customerPhone,
-        appointment_date: data.appointmentDate,
-        appointment_time: data.appointmentTime,
-        location: data.location,
-        zone: data.zone,
-        notes: data.notes,
-        status: data.status,
-        assigned_inspector: data.assignedInspector
+        listing_id: data.listingId, listing_title: data.listingTitle, customer_name: data.customerName, customer_phone: data.customerPhone,
+        appointment_date: data.appointmentDate, appointment_time: data.appointmentTime, location: data.location, zone: data.zone, notes: data.notes, status: data.status, assigned_inspector: data.assignedInspector
       }]).select().single();
-
       if (error) throw error;
       await fetchAppointments();
       return inserted;
-    } catch (error: any) {
-      alert("حدث خطأ أثناء حجز الموعد: " + error.message);
-      return null;
-    }
+    } catch (error: any) { alert("حدث خطأ أثناء حجز الموعد: " + error.message); return null; }
   };
 
   const updateAppointmentStatus = async (id: string, status: FieldInspectionAppointment['status'], assignedInspector?: string) => {
     try {
       const updateData: any = { status };
       if (assignedInspector) updateData.assigned_inspector = assignedInspector;
-      
       const { error } = await supabase.from('appointments').update(updateData).eq('id', id);
       if (error) throw error;
       await fetchAppointments();
     } catch (error) { console.error("Error updating appointment:", error); }
   };
 
-  const updateCommissionRates = (newRates: Partial<CommissionRatesConfig>) => { setCommissionRates((prev) => ({ ...prev, ...newRates, lastUpdated: new Date().toISOString().slice(0, 10) })); };
-  
   const addPaymentAgent = async (agentData: Omit<PaymentAgent, 'id'>) => {
     try {
       const { data, error } = await supabase.from('agents').insert([{
-        name: agentData.name,
-        agency_name: agentData.agencyName,
-        zone: agentData.zone,
-        address: agentData.address,
-        phone: agentData.phone,
-        balance_syp: agentData.balanceSYP,
-        balance_usd: agentData.balanceUSD,
-        is_active: agentData.isActive
+        name: agentData.name, agency_name: agentData.agencyName, zone: agentData.zone, address: agentData.address, phone: agentData.phone,
+        balance_syp: agentData.balanceSYP, balance_usd: agentData.balanceUSD, is_active: agentData.isActive
       }]).select().single();
-
       if (error) throw error;
       await fetchAgents();
       return data;
@@ -612,25 +617,17 @@ export function useYamangoStore() {
     if (!currentUser) return null;
     try {
       const { error } = await supabase.from('garage_reviews').insert([{
-        garage_id: reviewData.garageId,
-        user_id: currentUser.id,
-        user_name: reviewData.userName,
-        rating: reviewData.rating,
-        comment: reviewData.comment,
-        verified_inspection: reviewData.verifiedInspection,
+        garage_id: reviewData.garageId, user_id: currentUser.id, user_name: reviewData.userName,
+        rating: reviewData.rating, comment: reviewData.comment, verified_inspection: reviewData.verifiedInspection,
       }]);
       if (error) throw error;
-      await fetchReviews();
-      await fetchGarages();
+      await fetchReviews(); await fetchGarages();
       return { ...reviewData, id: 'temp', createdAt: Date.now() };
-    } catch (error: any) {
-      alert("حدث خطأ أثناء إضافة المراجعة: " + error.message);
-      return null;
-    }
+    } catch (error: any) { alert("حدث خطأ أثناء إضافة المراجعة: " + error.message); return null; }
   };
 
   const resetToSeedData = () => { 
-    fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); fetchUsedItems(); fetchUsedItemOrders(); fetchAgents(); fetchReviews(); fetchAppointments();
+    fetchSettings(); fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); fetchUsedItems(); fetchUsedItemOrders(); fetchAgents(); fetchReviews(); fetchAppointments();
     localStorage.clear(); window.location.reload(); 
   };
 
