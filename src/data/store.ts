@@ -261,7 +261,7 @@ export function useYamangoStore() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) fetchProfile(session.user.id); else setIsAuthLoading(false);
     });
-    fetchSettings(); // 🔥 جلب الإعدادات من السحابة
+    fetchSettings();
     fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); fetchUsedItems(); fetchUsedItemOrders(); fetchAgents(); fetchReviews(); fetchAppointments();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -285,38 +285,28 @@ export function useYamangoStore() {
   const visibleListings = listings.filter(l => l.status === 'active' || l.userId === currentUser?.id || currentUser?.roles.includes('admin'));
   const rankedData = rankListings(visibleListings, filter, 5);
 
-  // 🔥 تحديث سعر الصرف في السحابة
   const updateExchangeRate = async (newRate: number, autoRecalculate: boolean = true) => {
     if (newRate <= 0) return { success: false, message: 'سعر الصرف يجب أن يكون أكبر من الصفر' };
     
     const newConfig: CurrencyRateConfig = { 
-      usdToSypRate: newRate, 
-      lastUpdated: new Date().toISOString().slice(0, 10), 
-      autoUpdateListings: autoRecalculate, 
-      sourceNote: `سعر محدث يدوياً (${newRate.toLocaleString()} ل.س)` 
+      usdToSypRate: newRate, lastUpdated: new Date().toISOString().slice(0, 10), autoUpdateListings: autoRecalculate, sourceNote: `سعر محدث يدوياً (${newRate.toLocaleString()} ل.س)` 
     };
 
     try {
       const { error } = await supabase.from('settings').update({ value: newConfig }).eq('key', 'currency_config');
       if (error) throw error;
-      
-      setCurrencyConfig(newConfig); // تحديث الواجهة فوراً
+      setCurrencyConfig(newConfig);
       return { success: true, newRate, listingsUpdated: 0, dealsUpdated: 0, message: `تم تحديث سعر الصرف بنجاح إلى ${newRate.toLocaleString()} ل.س` };
-    } catch (error: any) {
-      return { success: false, message: error.message };
-    }
+    } catch (error: any) { return { success: false, message: error.message }; }
   };
 
-  // 🔥 تحديث العمولات في السحابة
   const updateCommissionRates = async (newRates: Partial<CommissionRatesConfig>) => {
     const updatedRates = { ...commissionRates, ...newRates, lastUpdated: new Date().toISOString().slice(0, 10) };
     try {
       const { error } = await supabase.from('settings').update({ value: updatedRates }).eq('key', 'commission_rates');
       if (error) throw error;
       setCommissionRates(updatedRates);
-    } catch (error) {
-      console.error("Error saving commission rates:", error);
-    }
+    } catch (error) { console.error("Error saving commission rates:", error); }
   };
 
   const promoteListing = async (listingId: string, packageId: string) => {
@@ -341,8 +331,7 @@ export function useYamangoStore() {
         has_driver_option: newListing.hasDriverOption, driver_fee_per_day: newListing.driverFeePerDay, security_deposit: newListing.securityDeposit,
         zone: newListing.zone, location_details: newListing.locationDetails, images: newListing.images, chassis_number: newListing.chassisNumber,
         ownership_verified: true, gps_tracking_enabled: newListing.gpsTrackingEnabled, gps_device_id: newListing.gpsDeviceId,
-        service_notes: newListing.serviceNotes, 
-        status: currentUser.roles.includes('admin') ? 'active' : 'pending_approval',
+        service_notes: newListing.serviceNotes, status: currentUser.roles.includes('admin') ? 'active' : 'pending_approval',
       }]);
       if (error) throw error;
       await fetchListings();
@@ -382,10 +371,8 @@ export function useYamangoStore() {
     const contractData = {
       contractNumber: `YMG-2026-${Math.floor(1000 + Math.random() * 9000)}`,
       termsSummaryArabic: `عقد ${listing.operation === 'sale' ? 'بيع قطعي' : 'إيجار محدد المدة'} للمركبة ${listing.make} ${listing.model} موديل ${listing.year}.`,
-      qrVerificationHash: `SHA256:YMG-CONTRACT-${Date.now()}`,
-      signedAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
-      buyerSignature: `${currentUser.fullName} (توقيع إلكتروني)`,
-      sellerSignature: `${listing.sellerName} (توقيع إلكتروني)`,
+      qrVerificationHash: `SHA256:YMG-CONTRACT-${Date.now()}`, signedAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
+      buyerSignature: `${currentUser.fullName} (توقيع إلكتروني)`, sellerSignature: `${listing.sellerName} (توقيع إلكتروني)`,
     };
 
     const newDealData = {
@@ -397,16 +384,8 @@ export function useYamangoStore() {
     try {
       const { data, error } = await supabase.from('deals').insert([newDealData]).select().single();
       if (error) throw error;
-      await fetchDeals();
-      await supabase.from('listings').update({ status: 'in_deal' }).eq('id', listing.id);
-      await fetchListings();
-      
-      return {
-        id: data.id, listingId: listing.id, listingTitle: listing.title, listingCategory: listing.category, listingOperation: listing.operation,
-        buyerId: currentUser.id, buyerName: currentUser.fullName, sellerId: listing.userId, sellerName: listing.sellerName,
-        agreedPrice: offerPrice, currency: listing.currency, depositAmount: calc.depositRequired, platformCommissionRate: calc.commissionRate,
-        platformCommissionAmount: calc.commissionAmount, status: 'escrow_pending', secretOtp: secretOtp, contract: contractData, createdAt: data.created_at,
-      } as Deal;
+      await fetchDeals(); await supabase.from('listings').update({ status: 'in_deal' }).eq('id', listing.id); await fetchListings();
+      return { id: data.id, listingId: listing.id, listingTitle: listing.title, listingCategory: listing.category, listingOperation: listing.operation, buyerId: currentUser.id, buyerName: currentUser.fullName, sellerId: listing.userId, sellerName: listing.sellerName, agreedPrice: offerPrice, currency: listing.currency, depositAmount: calc.depositRequired, platformCommissionRate: calc.commissionRate, platformCommissionAmount: calc.commissionAmount, status: 'escrow_pending', secretOtp: secretOtp, contract: contractData, createdAt: data.created_at } as Deal;
     } catch (error: any) { alert("حدث خطأ أثناء إنشاء الصفقة: " + error.message); return null; }
   };
 
@@ -469,10 +448,7 @@ export function useYamangoStore() {
       if (error) throw error;
       await fetchInspectionRequests();
       if (request.listingId) {
-        await supabase.from('listings').update({
-          inspection_status: 'inspected',
-          inspection_badge: { reportId: report.id, garageName: report.garageName, garageId: report.garageId, inspectionDate: report.date, score: report.overallScore, verdict: report.verdict === 'poor' ? 'fair' : report.verdict }
-        }).eq('id', request.listingId);
+        await supabase.from('listings').update({ inspection_status: 'inspected', inspection_badge: { reportId: report.id, garageName: report.garageName, garageId: report.garageId, inspectionDate: report.date, score: report.overallScore, verdict: report.verdict === 'poor' ? 'fair' : report.verdict } }).eq('id', request.listingId);
         await fetchListings();
       }
       return true;
@@ -482,44 +458,22 @@ export function useYamangoStore() {
   const addUsedItem = async (itemData: Omit<UsedItem, 'id' | 'createdAt' | 'platformCommissionRate' | 'platformCommissionAmount' | 'sellerNetPayout'> & { customCommissionRate?: number }) => {
     if (!currentUser) return null;
     const calc = calculateUsedItemCommission(itemData.price, itemData.currency, itemData.customCommissionRate);
-
     try {
-      const { error } = await supabase.from('used_items').insert([{
-        seller_id: currentUser.id, seller_name: currentUser.fullName, seller_phone: currentUser.phone, seller_rating: 5.0,
-        title: itemData.title, category: itemData.category, condition: itemData.condition, price: itemData.price, currency: itemData.currency,
-        zone: itemData.zone, location_details: itemData.locationDetails, description: itemData.description, images: itemData.images,
-        platform_commission_rate: calc.commissionRate, platform_commission_amount: calc.commissionAmount, seller_net_payout: calc.sellerNetPayout,
-        status: 'available', delivery_option: itemData.deliveryOption, views_count: 1
-      }]);
+      const { error } = await supabase.from('used_items').insert([{ seller_id: currentUser.id, seller_name: currentUser.fullName, seller_phone: currentUser.phone, seller_rating: 5.0, title: itemData.title, category: itemData.category, condition: itemData.condition, price: itemData.price, currency: itemData.currency, zone: itemData.zone, location_details: itemData.locationDetails, description: itemData.description, images: itemData.images, platform_commission_rate: calc.commissionRate, platform_commission_amount: calc.commissionAmount, seller_net_payout: calc.sellerNetPayout, status: 'available', delivery_option: itemData.deliveryOption, views_count: 1 }]);
       if (error) throw error;
-      await fetchUsedItems();
-      return true;
+      await fetchUsedItems(); return true;
     } catch (error: any) { alert("حدث خطأ أثناء إضافة الغرض: " + error.message); return false; }
   };
 
   const purchaseUsedItem = async (orderData: Omit<UsedItemOrder, 'id' | 'createdAt' | 'secretOtp' | 'status'>) => {
-    const secretOtp = generateUsedItemOtp();
-    const newOrderId = generateUsedOrderId();
-
+    const secretOtp = generateUsedItemOtp(); const newOrderId = generateUsedOrderId();
     try {
-      const { error } = await supabase.from('used_item_orders').insert([{
-        id: newOrderId, item_id: orderData.itemId, buyer_id: orderData.buyerId, buyer_name: orderData.buyerName, buyer_phone: orderData.buyerPhone,
-        seller_id: orderData.sellerId, seller_name: orderData.sellerName, seller_phone: orderData.sellerPhone,
-        item_title: orderData.itemTitle, item_category: orderData.itemCategory, item_condition: orderData.itemCondition, item_price: orderData.itemPrice, currency: orderData.currency,
-        commission_rate: orderData.commissionRate, commission_amount: orderData.commissionAmount, seller_net_payout: orderData.sellerNetPayout,
-        payment_method: orderData.paymentMethod, agent_id: orderData.agentId, agent_name: orderData.agentName, agent_address: orderData.agentAddress, agent_phone: orderData.agentPhone,
-        status: 'escrow_secured', secret_otp: secretOtp, delivery_option: orderData.deliveryOption, delivery_address: orderData.deliveryAddress, notes: orderData.notes
-      }]);
-
+      const { error } = await supabase.from('used_item_orders').insert([{ id: newOrderId, item_id: orderData.itemId, buyer_id: orderData.buyerId, buyer_name: orderData.buyerName, buyer_phone: orderData.buyerPhone, seller_id: orderData.sellerId, seller_name: orderData.sellerName, seller_phone: orderData.sellerPhone, item_title: orderData.itemTitle, item_category: orderData.itemCategory, item_condition: orderData.itemCondition, item_price: orderData.itemPrice, currency: orderData.currency, commission_rate: orderData.commissionRate, commission_amount: orderData.commissionAmount, seller_net_payout: orderData.sellerNetPayout, payment_method: orderData.paymentMethod, agent_id: orderData.agentId, agent_name: orderData.agentName, agent_address: orderData.agentAddress, agent_phone: orderData.agentPhone, status: 'escrow_secured', secret_otp: secretOtp, delivery_option: orderData.deliveryOption, delivery_address: orderData.deliveryAddress, notes: orderData.notes }]);
       if (error) throw error;
       await supabase.from('used_items').update({ status: 'reserved' }).eq('id', orderData.itemId);
-      await fetchUsedItemOrders();
-      await fetchUsedItems();
+      await fetchUsedItemOrders(); await fetchUsedItems();
       return { ...orderData, id: newOrderId, secretOtp, status: 'escrow_secured', createdAt: Date.now() } as UsedItemOrder;
-    } catch (error: any) {
-      alert("حدث خطأ أثناء إتمام الطلب: " + error.message);
-      return null;
-    }
+    } catch (error: any) { alert("حدث خطأ أثناء إتمام الطلب: " + error.message); return null; }
   };
 
   const updateUsedOrderStatus = async (orderId: string, newStatus: UsedItemOrder['status']) => {
@@ -527,74 +481,43 @@ export function useYamangoStore() {
       const { error } = await supabase.from('used_item_orders').update({ status: newStatus }).eq('id', orderId);
       if (error) throw error;
       const order = usedItemOrders.find(o => o.id === orderId);
-      if (order) {
-        const itemStatus = newStatus === 'completed' ? 'sold' : newStatus === 'cancelled' ? 'available' : 'reserved';
-        await supabase.from('used_items').update({ status: itemStatus }).eq('id', order.itemId);
-        await fetchUsedItems();
-      }
+      if (order) { const itemStatus = newStatus === 'completed' ? 'sold' : newStatus === 'cancelled' ? 'available' : 'reserved'; await supabase.from('used_items').update({ status: itemStatus }).eq('id', order.itemId); await fetchUsedItems(); }
       await fetchUsedItemOrders();
     } catch (error) { console.error("Error updating order status:", error); }
   };
 
   const deleteUsedItem = async (itemId: string) => {
-    try {
-      const { error } = await supabase.from('used_items').delete().eq('id', itemId);
-      if (error) throw error;
-      await fetchUsedItems();
-    } catch (error) { alert("تعذر حذف الغرض."); }
+    try { const { error } = await supabase.from('used_items').delete().eq('id', itemId); if (error) throw error; await fetchUsedItems(); } catch (error) { alert("تعذر حذف الغرض."); }
   };
 
   const bookAppointment = async (data: Omit<FieldInspectionAppointment, 'id' | 'createdAt'>) => {
     try {
-      const { data: inserted, error } = await supabase.from('appointments').insert([{
-        listing_id: data.listingId, listing_title: data.listingTitle, customer_name: data.customerName, customer_phone: data.customerPhone,
-        appointment_date: data.appointmentDate, appointment_time: data.appointmentTime, location: data.location, zone: data.zone, notes: data.notes, status: data.status, assigned_inspector: data.assignedInspector
-      }]).select().single();
-      if (error) throw error;
-      await fetchAppointments();
-      return inserted;
+      const { data: inserted, error } = await supabase.from('appointments').insert([{ listing_id: data.listingId, listing_title: data.listingTitle, customer_name: data.customerName, customer_phone: data.customerPhone, appointment_date: data.appointmentDate, appointment_time: data.appointmentTime, location: data.location, zone: data.zone, notes: data.notes, status: data.status, assigned_inspector: data.assignedInspector }]).select().single();
+      if (error) throw error; await fetchAppointments(); return inserted;
     } catch (error: any) { alert("حدث خطأ أثناء حجز الموعد: " + error.message); return null; }
   };
 
   const updateAppointmentStatus = async (id: string, status: FieldInspectionAppointment['status'], assignedInspector?: string) => {
     try {
-      const updateData: any = { status };
-      if (assignedInspector) updateData.assigned_inspector = assignedInspector;
+      const updateData: any = { status }; if (assignedInspector) updateData.assigned_inspector = assignedInspector;
       const { error } = await supabase.from('appointments').update(updateData).eq('id', id);
-      if (error) throw error;
-      await fetchAppointments();
+      if (error) throw error; await fetchAppointments();
     } catch (error) { console.error("Error updating appointment:", error); }
   };
 
   const addPaymentAgent = async (agentData: Omit<PaymentAgent, 'id'>) => {
     try {
-      const { data, error } = await supabase.from('agents').insert([{
-        name: agentData.name, agency_name: agentData.agencyName, zone: agentData.zone, address: agentData.address, phone: agentData.phone,
-        balance_syp: agentData.balanceSYP, balance_usd: agentData.balanceUSD, is_active: agentData.isActive
-      }]).select().single();
-      if (error) throw error;
-      await fetchAgents();
-      return data;
+      const { data, error } = await supabase.from('agents').insert([{ name: agentData.name, agency_name: agentData.agencyName, zone: agentData.zone, address: agentData.address, phone: agentData.phone, balance_syp: agentData.balanceSYP, balance_usd: agentData.balanceUSD, is_active: agentData.isActive }]).select().single();
+      if (error) throw error; await fetchAgents(); return data;
     } catch (error: any) { alert(error.message); return null; }
   };
 
   const removePaymentAgent = async (agentId: string) => {
-    try {
-      const { error } = await supabase.from('agents').delete().eq('id', agentId);
-      if (error) throw error;
-      await fetchAgents();
-      return true;
-    } catch (error) { return false; }
+    try { const { error } = await supabase.from('agents').delete().eq('id', agentId); if (error) throw error; await fetchAgents(); return true; } catch (error) { return false; }
   };
 
   const toggleAgentStatus = async (agentId: string) => {
-    try {
-      const agent = agents.find(a => a.id === agentId);
-      if (!agent) return;
-      const { error } = await supabase.from('agents').update({ is_active: !agent.isActive }).eq('id', agentId);
-      if (error) throw error;
-      await fetchAgents();
-    } catch (error) { console.error(error); }
+    try { const agent = agents.find(a => a.id === agentId); if (!agent) return; const { error } = await supabase.from('agents').update({ is_active: !agent.isActive }).eq('id', agentId); if (error) throw error; await fetchAgents(); } catch (error) { console.error(error); }
   };
 
   const regenerateDealOtp = (dealId: string, customCode?: string) => { const freshCode = customCode ? customCode.trim().toUpperCase() : generateAgentVerificationOtp(); setDeals((prev) => prev.map((d) => (d.id === dealId ? { ...d, secretOtp: freshCode } : d))); return freshCode; };
@@ -616,20 +539,13 @@ export function useYamangoStore() {
   const addGarageReview = async (reviewData: Omit<GarageReview, 'id' | 'createdAt'>) => {
     if (!currentUser) return null;
     try {
-      const { error } = await supabase.from('garage_reviews').insert([{
-        garage_id: reviewData.garageId, user_id: currentUser.id, user_name: reviewData.userName,
-        rating: reviewData.rating, comment: reviewData.comment, verified_inspection: reviewData.verifiedInspection,
-      }]);
-      if (error) throw error;
-      await fetchReviews(); await fetchGarages();
+      const { error } = await supabase.from('garage_reviews').insert([{ garage_id: reviewData.garageId, user_id: currentUser.id, user_name: reviewData.userName, rating: reviewData.rating, comment: reviewData.comment, verified_inspection: reviewData.verifiedInspection }]);
+      if (error) throw error; await fetchReviews(); await fetchGarages();
       return { ...reviewData, id: 'temp', createdAt: Date.now() };
     } catch (error: any) { alert("حدث خطأ أثناء إضافة المراجعة: " + error.message); return null; }
   };
 
-  const resetToSeedData = () => { 
-    fetchSettings(); fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); fetchUsedItems(); fetchUsedItemOrders(); fetchAgents(); fetchReviews(); fetchAppointments();
-    localStorage.clear(); window.location.reload(); 
-  };
+  const resetToSeedData = () => { fetchSettings(); fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); fetchUsedItems(); fetchUsedItemOrders(); fetchAgents(); fetchReviews(); fetchAppointments(); localStorage.clear(); window.location.reload(); };
 
   return {
     isAuthLoading, isAuthenticated, currentUser, activeRole, login: async () => {}, logout, switchRole,
@@ -639,6 +555,7 @@ export function useYamangoStore() {
     language, setLanguage, filter, setFilter, promoteListing, addListing, requestInspection, submitInspectionReport, createDeal, confirmEscrowByAgent,
     confirmDeliveryAndClose, updateExchangeRate, bookAppointment, updateAppointmentStatus, updateListingServiceNotes,
     usedItems, usedItemOrders, addUsedItem, purchaseUsedItem, updateUsedOrderStatus, deleteUsedItem, resetToSeedData,
-    updateListingStatus, deleteListing, fetchAllUsers, updateUserRole
+    updateListingStatus, deleteListing, fetchAllUsers, updateUserRole,
+    fetchGarages // 🔥 تم إضافة هذا السطر لحل مشكلة الحذف
   };
 }
