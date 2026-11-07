@@ -6,7 +6,7 @@ import {
   AuditLogEntry, GarageReview, UsedItem, UsedItemOrder,
 } from '../types';
 import { 
-  SEED_AGENTS, SEED_PROMOTION_PACKAGES, SEED_APPOINTMENTS, DEFAULT_CURRENCY_CONFIG,
+  SEED_PROMOTION_PACKAGES, DEFAULT_CURRENCY_CONFIG,
   DEFAULT_COMMISSION_RATES, SEED_ADMINS, SEED_AUDIT_LOGS
 } from './seedData';
 import { rankListings, ListingFilter } from '../utils/ranking';
@@ -15,7 +15,6 @@ import { calculateUsedItemCommission, generateUsedItemOtp, generateUsedOrderId }
 import { supabase } from '../lib/supabase';
 
 const STORAGE_KEY_CURRENCY = 'yamango_currency_v1';
-const STORAGE_KEY_APPOINTMENTS = 'yamango_appointments_v1';
 const STORAGE_KEY_COMMISSION = 'yamango_commission_rates_v1';
 const STORAGE_KEY_ADMINS = 'yamango_admins_v1';
 const STORAGE_KEY_AUDIT_LOGS = 'yamango_audit_logs_v1';
@@ -37,14 +36,12 @@ export function useYamangoStore() {
   const [usedItems, setUsedItems] = useState<UsedItem[]>([]);
   const [usedItemOrders, setUsedItemOrders] = useState<UsedItemOrder[]>([]);
   const [agents, setAgents] = useState<PaymentAgent[]>([]);
-  const [reviews, setReviews] = useState<GarageReview[]>([]); // 🔥 التقييمات السحابية
+  const [reviews, setReviews] = useState<GarageReview[]>([]);
+  const [appointments, setAppointments] = useState<FieldInspectionAppointment[]>([]); // 🔥 مواعيد من السحابة
 
   // --- Config State ---
   const [currencyConfig, setCurrencyConfig] = useState<CurrencyRateConfig>(() => {
     try { const saved = localStorage.getItem(STORAGE_KEY_CURRENCY); return saved ? JSON.parse(saved) : DEFAULT_CURRENCY_CONFIG; } catch { return DEFAULT_CURRENCY_CONFIG; }
-  });
-  const [appointments, setAppointments] = useState<FieldInspectionAppointment[]>(() => {
-    try { const saved = localStorage.getItem(STORAGE_KEY_APPOINTMENTS); return saved ? JSON.parse(saved) : SEED_APPOINTMENTS; } catch { return SEED_APPOINTMENTS; }
   });
   const [commissionRates, setCommissionRates] = useState<CommissionRatesConfig>(() => {
     try { const saved = localStorage.getItem(STORAGE_KEY_COMMISSION); return saved ? JSON.parse(saved) : DEFAULT_COMMISSION_RATES; } catch { return DEFAULT_COMMISSION_RATES; }
@@ -140,21 +137,14 @@ export function useYamangoStore() {
     } catch (error) { console.error("Error fetching garages:", error); }
   };
 
-  // 🔥 جلب التقييمات من السحابة
   const fetchReviews = async () => {
     try {
       const { data, error } = await supabase.from('garage_reviews').select('*').order('created_at', { ascending: false });
       if (error) throw error;
       if (data) {
         setReviews(data.map((item) => ({
-          id: item.id,
-          garageId: item.garage_id,
-          userName: item.user_name,
-          rating: item.rating,
-          comment: item.comment,
-          date: new Date(item.created_at).toISOString().split('T')[0],
-          createdAt: item.created_at,
-          verifiedInspection: item.verified_inspection,
+          id: item.id, garageId: item.garage_id, userName: item.user_name, rating: item.rating,
+          comment: item.comment, date: new Date(item.created_at).toISOString().split('T')[0], createdAt: item.created_at, verifiedInspection: item.verified_inspection,
         })));
       }
     } catch (error) { console.error("Error fetching reviews:", error); }
@@ -220,6 +210,30 @@ export function useYamangoStore() {
     } catch (error) { console.error("Error fetching agents:", error); }
   };
 
+  const fetchAppointments = async () => {
+    try {
+      const { data, error } = await supabase.from('appointments').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data) {
+        setAppointments(data.map(item => ({
+          id: item.id,
+          listingId: item.listing_id,
+          listingTitle: item.listing_title,
+          customerName: item.customer_name,
+          customerPhone: item.customer_phone,
+          appointmentDate: item.appointment_date,
+          appointmentTime: item.appointment_time,
+          location: item.location,
+          zone: item.zone as ZoneLocation,
+          notes: item.notes,
+          status: item.status as FieldInspectionAppointment['status'],
+          assignedInspector: item.assigned_inspector,
+          createdAt: item.created_at
+        })));
+      }
+    } catch (error) { console.error("Error fetching appointments:", error); }
+  };
+
   const fetchAllUsers = async () => {
     try {
       const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
@@ -246,7 +260,7 @@ export function useYamangoStore() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) fetchProfile(session.user.id); else setIsAuthLoading(false);
     });
-    fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); fetchUsedItems(); fetchUsedItemOrders(); fetchAgents(); fetchReviews();
+    fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); fetchUsedItems(); fetchUsedItemOrders(); fetchAgents(); fetchReviews(); fetchAppointments();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) { fetchProfile(session.user.id); fetchDeals(); fetchInspectionRequests(); fetchUsedItemOrders(); } 
@@ -258,12 +272,11 @@ export function useYamangoStore() {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_CURRENCY, JSON.stringify(currencyConfig));
-      localStorage.setItem(STORAGE_KEY_APPOINTMENTS, JSON.stringify(appointments));
       localStorage.setItem(STORAGE_KEY_COMMISSION, JSON.stringify(commissionRates));
       localStorage.setItem(STORAGE_KEY_ADMINS, JSON.stringify(admins));
       localStorage.setItem(STORAGE_KEY_AUDIT_LOGS, JSON.stringify(auditLogs));
     } catch (e) {}
-  }, [currencyConfig, appointments, commissionRates, admins, auditLogs]);
+  }, [currencyConfig, commissionRates, admins, auditLogs]);
 
   const logout = async () => { await supabase.auth.signOut(); };
   const switchRole = (role: UserRole) => { if (currentUser?.roles.includes(role) || currentUser?.roles.includes('admin')) setActiveRole(role); };
@@ -503,17 +516,82 @@ export function useYamangoStore() {
     return { success: true, newRate, listingsUpdated: 0, dealsUpdated: 0, message: `تم التحديث إلى ${newRate} ل.س` };
   };
 
-  const bookAppointment = (data: Omit<FieldInspectionAppointment, 'id' | 'createdAt'>) => {
-    const newAppointment: FieldInspectionAppointment = { ...data, id: `app_${Date.now()}`, createdAt: Date.now() };
-    setAppointments((prev) => [newAppointment, ...prev]); return newAppointment;
+  const bookAppointment = async (data: Omit<FieldInspectionAppointment, 'id' | 'createdAt'>) => {
+    try {
+      const { data: inserted, error } = await supabase.from('appointments').insert([{
+        listing_id: data.listingId,
+        listing_title: data.listingTitle,
+        customer_name: data.customerName,
+        customer_phone: data.customerPhone,
+        appointment_date: data.appointmentDate,
+        appointment_time: data.appointmentTime,
+        location: data.location,
+        zone: data.zone,
+        notes: data.notes,
+        status: data.status,
+        assigned_inspector: data.assignedInspector
+      }]).select().single();
+
+      if (error) throw error;
+      await fetchAppointments();
+      return inserted;
+    } catch (error: any) {
+      alert("حدث خطأ أثناء حجز الموعد: " + error.message);
+      return null;
+    }
   };
-  const updateAppointmentStatus = (id: string, status: FieldInspectionAppointment['status'], assignedInspector?: string) => {
-    setAppointments((prev) => prev.map((app) => app.id === id ? { ...app, status, ...(assignedInspector ? { assignedInspector } : {}) } : app));
+
+  const updateAppointmentStatus = async (id: string, status: FieldInspectionAppointment['status'], assignedInspector?: string) => {
+    try {
+      const updateData: any = { status };
+      if (assignedInspector) updateData.assigned_inspector = assignedInspector;
+      
+      const { error } = await supabase.from('appointments').update(updateData).eq('id', id);
+      if (error) throw error;
+      await fetchAppointments();
+    } catch (error) { console.error("Error updating appointment:", error); }
   };
+
   const updateCommissionRates = (newRates: Partial<CommissionRatesConfig>) => { setCommissionRates((prev) => ({ ...prev, ...newRates, lastUpdated: new Date().toISOString().slice(0, 10) })); };
-  const addPaymentAgent = (agentData: Omit<PaymentAgent, 'id'>) => { const newAgent: PaymentAgent = { ...agentData, id: `ag_${Date.now()}` }; setAgents((prev) => [newAgent, ...prev]); return newAgent; };
-  const removePaymentAgent = (agentId: string) => { setAgents((prev) => prev.filter((a) => a.id !== agentId)); return true; };
-  const toggleAgentStatus = (agentId: string) => { setAgents((prev) => prev.map((a) => (a.id === agentId ? { ...a, isActive: !a.isActive } : a))); };
+  
+  const addPaymentAgent = async (agentData: Omit<PaymentAgent, 'id'>) => {
+    try {
+      const { data, error } = await supabase.from('agents').insert([{
+        name: agentData.name,
+        agency_name: agentData.agencyName,
+        zone: agentData.zone,
+        address: agentData.address,
+        phone: agentData.phone,
+        balance_syp: agentData.balanceSYP,
+        balance_usd: agentData.balanceUSD,
+        is_active: agentData.isActive
+      }]).select().single();
+
+      if (error) throw error;
+      await fetchAgents();
+      return data;
+    } catch (error: any) { alert(error.message); return null; }
+  };
+
+  const removePaymentAgent = async (agentId: string) => {
+    try {
+      const { error } = await supabase.from('agents').delete().eq('id', agentId);
+      if (error) throw error;
+      await fetchAgents();
+      return true;
+    } catch (error) { return false; }
+  };
+
+  const toggleAgentStatus = async (agentId: string) => {
+    try {
+      const agent = agents.find(a => a.id === agentId);
+      if (!agent) return;
+      const { error } = await supabase.from('agents').update({ is_active: !agent.isActive }).eq('id', agentId);
+      if (error) throw error;
+      await fetchAgents();
+    } catch (error) { console.error(error); }
+  };
+
   const regenerateDealOtp = (dealId: string, customCode?: string) => { const freshCode = customCode ? customCode.trim().toUpperCase() : generateAgentVerificationOtp(); setDeals((prev) => prev.map((d) => (d.id === dealId ? { ...d, secretOtp: freshCode } : d))); return freshCode; };
   
   const toggleAdmin2fa = (adminId: string) => {
@@ -523,13 +601,13 @@ export function useYamangoStore() {
     setAuditLogs((prev) => [{ id: `aud_${Date.now()}`, timestamp: `${timeStr} بتوقيت دمشق`, timestampMs: Date.now(), actorId: currentUser?.id || 'sys', actorName: currentUser?.fullName || 'System', actorRole: 'المشرف العام', category: 'security_auth', categoryLabelArabic: 'أمان الحسابات', action: newStatus ? '2fa_enabled' : '2fa_disabled', actionTitleArabic: newStatus ? 'تفعيل 2FA' : 'تعطيل 2FA', details: `تم التحديث للحساب ${toggledName}`, severity: 'high', status: 'success', location: 'السويداء', ipAddress: '185.12.84.19' }, ...prev]);
     return newStatus;
   };
+  
   const addAuditLogEntry = (entry: Omit<AuditLogEntry, 'id' | 'timestamp' | 'timestampMs'>) => {
     const now = new Date(); const timeStr = `${now.toISOString().slice(0, 10)} ${now.toLocaleTimeString('ar-SY')}`;
     const newEntry: AuditLogEntry = { ...entry, id: `aud_${Date.now()}`, timestamp: `${timeStr} بتوقيت دمشق`, timestampMs: Date.now() };
     setAuditLogs((prev) => [newEntry, ...prev]); return newEntry;
   };
 
-  // 🔥 دالة إضافة التقييم السحابية
   const addGarageReview = async (reviewData: Omit<GarageReview, 'id' | 'createdAt'>) => {
     if (!currentUser) return null;
     try {
@@ -542,11 +620,8 @@ export function useYamangoStore() {
         verified_inspection: reviewData.verifiedInspection,
       }]);
       if (error) throw error;
-      
-      // سيتم تحديث تقييم الكراج تلقائياً في قاعدة البيانات بفضل الـ Trigger
       await fetchReviews();
-      await fetchGarages(); // لتحديث الواجهة بمتوسط التقييم الجديد
-      
+      await fetchGarages();
       return { ...reviewData, id: 'temp', createdAt: Date.now() };
     } catch (error: any) {
       alert("حدث خطأ أثناء إضافة المراجعة: " + error.message);
@@ -555,7 +630,7 @@ export function useYamangoStore() {
   };
 
   const resetToSeedData = () => { 
-    fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); fetchUsedItems(); fetchUsedItemOrders(); fetchAgents(); fetchReviews();
+    fetchListings(); fetchDeals(); fetchGarages(); fetchInspectionRequests(); fetchUsedItems(); fetchUsedItemOrders(); fetchAgents(); fetchReviews(); fetchAppointments();
     localStorage.clear(); window.location.reload(); 
   };
 
